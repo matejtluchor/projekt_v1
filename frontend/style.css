@@ -1,0 +1,330 @@
+:root {
+  --bg: #0b1e33;
+  --card: #ffffff;
+  --muted: #6b7280;
+  --accent: #0a3a6b;
+  --accent-2: #fbbf24;
+  --success: #10b981;
+  --danger: #dc2626;
+  --radius: 10px;
+  --shadow: 0 8px 24px rgba(0,0,0,0.25);
+  --max-width: 1100px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(180deg, #081426, #0b1e33);
+  color: #f8fafc;
+}
+
+.hidden { display: none !important; }
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.topbar {
+  background: linear-gradient(90deg, var(--accent), #081426);
+  border-bottom: 3px solid var(--accent-2);
+  padding: 10px 0;
+}
+
+.topbar-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand-logo img {
+  height: 52px;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+}
+
+.logged-user {
+  font-weight: 700;
+  color: var(--accent-2);
+}
+
+/* KARTY */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  margin: 18px 0;
+  color: #0f172a;
+  overflow: hidden;
+}
+
+/* INPUTY */
+input, select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid #cbd5f5;
+  margin-bottom: 10px;
+  background: #f8fafc;
+}
+
+/* BUTTONY */
+.btn {
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.btn-primary {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: white;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 2px solid rgba(255,255,255,.4);
+  color: white;
+}
+
+/* USER */
+.user-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.user-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* MENU HLAVIČKA + DATUM */
+.menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.menu-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.menu-date label {
+  white-space: nowrap;
+}
+
+.menu-date select {
+  width: auto;
+  min-width: 150px;
+}
+
+/* LAYOUT */
+.grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+
+/* ADMIN */
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.admin-col {
+  background: #e5edff;
+  border-radius: var(--radius);
+  padding: 14px;
+}
+
+.admin-subtitle {
+  margin-top: 30px;
+  margin-bottom: 12px;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent);
+  border-left: 5px solid var(--accent-2);
+  padding-left: 10px;
+}
+
+.food-row,
+.day-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #c7d2fe;
+  gap: 10px;
+}
+
+/* TLAČÍTKO X V MENU NA DEN */
+.day-row button {
+  background: var(--danger);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.day-row button:hover {
+  opacity: 0.85;
+}
+
+/* MENU */
+.menu-item {
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 2px solid var(--accent);
+  margin-bottom: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.menu-item:hover {
+  background: #e5edff;
+}
+
+.menu-item.soldout {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* KOŠÍK */
+.cart-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.cart-main {
+  flex: 1;
+}
+
+.cart-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.cart-empty {
+  font-size: 14px;
+  color: var(--muted);
+  list-style: none;
+  padding: 4px 0;
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* TOAST */
+.toast-root {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toast-root div {
+  background: var(--accent);
+  color: white;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--accent-2);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* MODAL */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.modal {
+  background: white;
+  color: black;
+  padding: 30px;
+  border-radius: 14px;
+  min-width: 320px;
+  max-width: 90%;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.modal h3 {
+  margin-top: 0;
+}
+
+.modal button {
+  margin-top: 15px;
+  width: 100%;
+}
+
+.cart-bottom {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding-top: 10px;
+}
+
+.menu-date select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 2px solid var(--accent);
+  font-weight: 600;
+  background: #f1f5f9;
+}
+
+.cart-bottom {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding-top: 10px;
+}

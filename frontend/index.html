@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <title>Jídelna</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand-logo">
+      <img src="logo.png" alt="Logo" />
+    </div>
+
+    <div id="loggedUser" class="logged-user"></div>
+    <button id="logoutBtn" class="btn btn-ghost hidden">Odhlásit se</button>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- LOGIN -->
+  <section id="login" class="card auth-card">
+    <h2>Přihlášení</h2>
+    <input id="loginInput" placeholder="Zadej svůj login">
+    <input id="adminPassword" type="password" class="hidden" placeholder="Heslo">
+    <button id="loginBtn" class="btn btn-primary">Přihlásit</button>
+  </section>
+
+  <!-- USER -->
+  <section id="user" class="card hidden">
+    <div class="user-row">
+      <div>Kredit: <strong id="credit">0 Kč</strong></div>
+      <div class="user-actions">
+        <button id="topupBtn" class="btn btn-outline">Dobít kredit</button>
+        <button id="myOrdersBtn2" class="btn btn-outline">Moje objednávky</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MOJE OBJEDNÁVKY -->
+  <section id="myOrders" class="card hidden">
+    <h3>Moje objednávky</h3>
+    <div id="myOrdersList"></div>
+  </section>
+
+  <!-- TOPUP -->
+  <section id="topup" class="card hidden">
+    <h3>Dobít kredit</h3>
+    <input id="topupAmount" type="number" placeholder="částka">
+    <button id="createQrBtn" class="btn btn-primary">Vygenerovat QR</button>
+    <div id="qr" class="qr-box"></div>
+  </section>
+
+  <!-- MENU + KOŠÍK -->
+  <section class="grid">
+    <div id="menu" class="card hidden">
+      <div class="menu-header">
+        <h3>Menu na den</h3>
+        <div class="menu-date">
+          <label for="date">Datum:</label>
+          <select id="date"></select>
+        </div>
+      </div>
+      <div id="menuList"></div>
+    </div>
+
+    <aside id="order" class="card hidden">
+      <h3>Košík</h3>
+      <ul id="orderList"></ul>
+
+      <div class="cart-bottom">
+        <button id="sendOrderBtn" class="btn btn-success">Odeslat objednávku</button>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ADMIN -->
+  <section id="admin" class="card hidden">
+    <h3>Admin / Manager – přehled & tvorba menu</h3>
+
+    <h4 class="admin-subtitle">📊 STATISTIKY</h4>
+
+    <div class="card" id="adminStats"></div>
+
+    <div class="card">
+      <h3>📦 Součet objednávek na den</h3>
+      <input type="date" id="statsDate">
+      <div id="dailyStatsOutput"></div>
+    </div>
+
+    <h4 class="admin-subtitle">🍽️ MENU TVORBA</h4>
+
+    <div class="admin-head">
+      <input id="adminDate" type="date">
+    </div>
+
+    <div class="admin-grid">
+      <div class="admin-col">
+        <h4>Databáze jídel</h4>
+        <div id="foodsList"></div>
+      </div>
+
+      <div class="admin-col">
+        <h4>Menu na den</h4>
+        <div id="adminDayMenu"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<div id="toastRoot" class="toast-root"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
