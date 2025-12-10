@@ -2,6 +2,7 @@
 const express = require("express");
 const path = require("path");
 const { Pool } = require("pg");
+const bcrypt = require("bcrypt");
 
 const app = express();
 app.use(express.json());
@@ -10,8 +11,6 @@ app.use(express.static(path.join(__dirname, "../frontend")));
 // -----------------------------------------------------
 //  POSTGRESQL PŘIPOJENÍ
 // -----------------------------------------------------
-// Na Renderu nastavíš proměnnou DATABASE_URL
-// = "Internal Database URL" z tvé Postgres DB (jidelnapp-db).
 
 if (!process.env.DATABASE_URL) {
   console.warn(
@@ -21,14 +20,13 @@ if (!process.env.DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  // Render interní URL už má v sobě nastavené sslmode, takže
-  // tady nic dalšího řešit nemusíme.
 });
 
 // -----------------------------------------------------
-//  VYTVOŘENÍ TABULEK (při startu backendu)
+//  VYTVOŘENÍ TABULEK + ÚPRAVA USERS + ADMIN ÚČTY
 // -----------------------------------------------------
 async function initDb() {
+  // základní tabulky
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -67,51 +65,159 @@ async function initDb() {
     );
   `);
 
-  console.log("✅ PostgreSQL tabulky jsou připravené");
+  // přidání sloupců pro heslo + roli (pokud ještě nejsou)
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS password_hash TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
+  `);
+
+  // starým userům bez role nastavíme user
+  await pool.query(`UPDATE users SET role = 'user' WHERE role IS NULL;`);
+
+  // vytvoření / aktualizace admin a manager účtů
+  const adminsToSeed = [
+    { identifier: "admin", password: "1973", role: "admin" },
+    { identifier: "manager", password: "123", role: "manager" },
+  ];
+
+  for (const u of adminsToSeed) {
+    const hash = await bcrypt.hash(u.password, 10);
+
+    const existing = await pool.query(
+      "SELECT id FROM users WHERE identifier = $1",
+      [u.identifier]
+    );
+
+    if (existing.rowCount > 0) {
+      await pool.query(
+        "UPDATE users SET role = $1, password_hash = $2 WHERE id = $3",
+        [u.role, hash, existing.rows[0].id]
+      );
+    } else {
+      await pool.query(
+        "INSERT INTO users (identifier, password_hash, role, credit) VALUES ($1, $2, $3, 0)",
+        [u.identifier, hash, u.role]
+      );
+    }
+  }
+
+  console.log("✅ PostgreSQL tabulky + uživatelé (admin/manager) připravené");
 }
 
 // -----------------------------------------------------
-//  ADMIN / MANAGER
+//  REGISTRACE
 // -----------------------------------------------------
-const ADMINS = {
-  admin: "1973",
-  manager: "123",
-};
+app.post("/api/register", async (req, res) => {
+  try {
+    const { identifier, password } = req.body || {};
+
+    if (!identifier || !password) {
+      return res.json({
+        success: false,
+        error: "Vyplň uživatelské jméno i heslo.",
+      });
+    }
+
+    // zakážeme použít názvy admin/manager
+    if (["admin", "manager"].includes(identifier.toLowerCase())) {
+      return res.json({
+        success: false,
+        error: "Toto jméno je rezervované pro administrátory.",
+      });
+    }
+
+    const exists = await pool.query(
+      "SELECT id FROM users WHERE identifier = $1",
+      [identifier]
+    );
+    if (exists.rowCount > 0) {
+      return res.json({
+        success: false,
+        error: "Tento uživatel už existuje.",
+      });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    const insert = await pool.query(
+      `
+      INSERT INTO users (identifier, password_hash, role, credit)
+      VALUES ($1, $2, 'user', 0)
+      RETURNING id, credit, role, identifier
+    `,
+      [identifier, hash]
+    );
+
+    const u = insert.rows[0];
+
+    // AUTO LOGIN po registraci
+    return res.json({
+      success: true,
+      userId: u.id,
+      credit: u.credit,
+      role: u.role,
+      identifier: u.identifier,
+    });
+  } catch (err) {
+    console.error("POST /api/register error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
 
 // -----------------------------------------------------
 //  LOGIN
 // -----------------------------------------------------
 app.post("/api/login", async (req, res) => {
   try {
-    const { identifier, password } = req.body;
+    const { identifier, password } = req.body || {};
 
-    // kontrola admin hesla
-    if (ADMINS[identifier] && ADMINS[identifier] !== password) {
-      return res.json({ success: false, error: "Špatné heslo" });
+    if (!identifier || !password) {
+      return res.json({
+        success: false,
+        error: "Vyplň uživatelské jméno i heslo.",
+      });
     }
 
     const result = await pool.query(
-      "SELECT * FROM users WHERE identifier = $1",
+      "SELECT id, credit, role, password_hash, identifier FROM users WHERE identifier = $1",
       [identifier]
     );
 
-    let user;
-
     if (result.rowCount === 0) {
-      const insert = await pool.query(
-        "INSERT INTO users (identifier, credit) VALUES ($1, 0) RETURNING id, credit",
-        [identifier]
-      );
-      user = insert.rows[0];
-    } else {
-      user = result.rows[0];
+      return res.json({
+        success: false,
+        error: "Uživatel neexistuje.",
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.password_hash) {
+      return res.json({
+        success: false,
+        error: "Tento účet nemá nastavené heslo.",
+      });
+    }
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+      return res.json({
+        success: false,
+        error: "Špatné jméno nebo heslo.",
+      });
     }
 
     res.json({
       success: true,
       userId: user.id,
       credit: user.credit,
-      role: ADMINS[identifier] ? "admin" : "user",
+      role: user.role || "user",
+      identifier: user.identifier,
     });
   } catch (err) {
     console.error("LOGIN error:", err);
@@ -339,7 +445,7 @@ app.post("/api/order", async (req, res) => {
   } catch (err) {
     console.error("POST /api/order error:", err);
     try {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
     } catch (_) {}
     res.status(500).json({ success: false, error: "Server error" });
   } finally {
@@ -355,7 +461,7 @@ app.get("/api/orders/history", async (req, res) => {
     const userId = req.query.userId;
     const result = await pool.query(
       `
-      SELECT id, date, itemNames, price 
+      SELECT id, date, itemNames AS "itemNames", price 
       FROM orders
       WHERE userId = $1 AND status = 'ok'
       ORDER BY date DESC, id DESC
@@ -400,7 +506,7 @@ app.post("/api/orders/cancel", async (req, res) => {
       });
     }
 
-    const items = order.itemnames.split(", ");
+    const items = (order.itemnames || "").split(", ").filter(Boolean);
 
     for (const name of items) {
       await client.query(
@@ -528,7 +634,7 @@ app.get("/api/admin/stats/month", async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT itemNames, price 
+      SELECT itemNames AS "itemNames", price 
       FROM orders 
       WHERE date >= $1 AND status = 'ok'
     `,
@@ -540,9 +646,12 @@ app.get("/api/admin/stats/month", async (req, res) => {
 
     result.rows.forEach((o) => {
       total += o.price;
-      o.itemnames.split(", ").forEach((n) => {
-        foods[n] = (foods[n] || 0) + 1;
-      });
+      (o.itemNames || "")
+        .split(", ")
+        .filter(Boolean)
+        .forEach((n) => {
+          foods[n] = (foods[n] || 0) + 1;
+        });
     });
 
     const topFoods = Object.entries(foods)
@@ -565,7 +674,7 @@ app.get("/api/admin/stats/day", async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT itemNames 
+      SELECT itemNames AS "itemNames"
       FROM orders 
       WHERE date = $1 AND status = 'ok'
     `,
@@ -574,9 +683,12 @@ app.get("/api/admin/stats/day", async (req, res) => {
 
     const sum = {};
     result.rows.forEach((o) => {
-      o.itemnames.split(", ").forEach((n) => {
-        sum[n] = (sum[n] || 0) + 1;
-      });
+      (o.itemNames || "")
+        .split(", ")
+        .filter(Boolean)
+        .forEach((n) => {
+          sum[n] = (sum[n] || 0) + 1;
+        });
     });
 
     res.json(sum);

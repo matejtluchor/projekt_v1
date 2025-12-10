@@ -22,12 +22,19 @@
 <main class="container">
 
   <!-- LOGIN -->
-  <section id="login" class="card auth-card">
-    <h2>Přihlášení</h2>
-    <input id="loginInput" placeholder="Zadej svůj login">
-    <input id="adminPassword" type="password" class="hidden" placeholder="Heslo">
+<section id="login" class="card auth-card">
+  <h2>Přihlášení / Registrace</h2>
+
+  <input id="loginInput" placeholder="Uživatelské jméno">
+
+  <!-- Heslo je teď POVINNÉ pro všechny -->
+  <input id="adminPassword" type="password" placeholder="Heslo">
+
+  <div class="login-actions">
     <button id="loginBtn" class="btn btn-primary">Přihlásit</button>
-  </section>
+    <button id="registerBtn" class="btn btn-outline">Registrovat</button>
+  </div>
+</section>
 
   <!-- USER -->
   <section id="user" class="card hidden">
