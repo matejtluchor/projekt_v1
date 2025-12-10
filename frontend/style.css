@@ -417,3 +417,60 @@ input, select {
   }
 
 }
+
+/* ===========================
+   📱 MOBILNÍ ÚPRAVY ADMINU
+   =========================== */
+@media (max-width: 768px) {
+
+  /* ADMIN GRID → pod sebe */
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* ADMIN bloky vzdušnější */
+  .admin-col {
+    padding: 16px;
+  }
+
+  /* Statistiky karty menší */
+  #adminStats,
+  #dailyStatsOutput {
+    font-size: 15px;
+    line-height: 1.4;
+  }
+
+  /* Nadpisy v adminu menší */
+  .admin-subtitle {
+    font-size: 16px;
+    margin-top: 20px;
+  }
+
+  /* Řádky jídel v adminu na výšku */
+  .food-row,
+  .day-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .food-row button,
+  .day-row button {
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .day-row input {
+    width: 100%;
+  }
+
+  /* ADMIN datum */
+  #adminDate,
+  #statsDate {
+    width: 100%;
+  }
+
+  /* MENU TVORBA sekce přehlednější */
+  #admin {
+    padding-bottom: 80px;
+  }
+}
