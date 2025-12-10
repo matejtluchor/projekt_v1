@@ -586,6 +586,70 @@ app.get("/api/admin/stats/day", async (req, res) => {
   }
 });
 
+
+// -----------------------------------------------------
+//  SEED: 10 POLÉVEK + 20 HLAVNÍCH JÍDEL
+// -----------------------------------------------------
+app.get("/api/admin/seed-foods", async (req, res) => {
+  const foods = [
+    // ===== POLÉVKY (10x) =====
+    { name: "Polévka – Gulášová", price: 39 },
+    { name: "Polévka – Česnečka", price: 35 },
+    { name: "Polévka – Kuřecí vývar", price: 34 },
+    { name: "Polévka – Dršťková", price: 42 },
+    { name: "Polévka – Rajská", price: 33 },
+    { name: "Polévka – Zelná", price: 36 },
+    { name: "Polévka – Bramboračka", price: 37 },
+    { name: "Polévka – Hovězí vývar", price: 38 },
+    { name: "Polévka – Fazolová", price: 35 },
+    { name: "Polévka – Kulajda", price: 40 },
+
+    // ===== HLAVNÍ JÍDLA (20x) =====
+    { name: "Hlavní – Smažený sýr s hranolky", price: 129 },
+    { name: "Hlavní – Kuřecí řízek s bramborem", price: 135 },
+    { name: "Hlavní – Vepřový řízek s kaší", price: 139 },
+    { name: "Hlavní – Svíčková na smetaně", price: 155 },
+    { name: "Hlavní – Hovězí guláš s knedlíkem", price: 145 },
+    { name: "Hlavní – Kuřecí steak s rýží", price: 142 },
+    { name: "Hlavní – Těstoviny s kuřecím masem", price: 129 },
+    { name: "Hlavní – Smažené kuřecí stripsy", price: 134 },
+    { name: "Hlavní – Segedínský guláš", price: 139 },
+    { name: "Hlavní – Pečené kuře s nádivkou", price: 148 },
+
+    { name: "Hlavní – Vepřová pečeně se zelím", price: 149 },
+    { name: "Hlavní – Hovězí na houbách", price: 152 },
+    { name: "Hlavní – Kuřecí na paprice", price: 138 },
+    { name: "Hlavní – Smažený květák", price: 119 },
+    { name: "Hlavní – Špagety Carbonara", price: 135 },
+    { name: "Hlavní – Lasagne", price: 145 },
+    { name: "Hlavní – Rizoto s kuřecím masem", price: 132 },
+    { name: "Hlavní – Vepřový plátek na hořčici", price: 141 },
+    { name: "Hlavní – Kuřecí burger s hranolky", price: 149 },
+    { name: "Hlavní – Hranolky se sýrovou omáčkou", price: 109 },
+  ];
+
+  try {
+    for (const f of foods) {
+      await pool.query(
+        "INSERT INTO foods (name, price) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [f.name, f.price]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: "✅ 10 polévek a 20 hlavních jídel bylo úspěšně vloženo",
+    });
+  } catch (err) {
+    console.error("SEED ERROR:", err);
+    res.status(500).json({
+      success: false,
+      error: "❌ Chyba při vkládání jídel",
+    });
+  }
+});
+
+
 // -----------------------------------------------------
 //  START SERVERU – nejdřív init DB, pak posloucháme
 // -----------------------------------------------------
