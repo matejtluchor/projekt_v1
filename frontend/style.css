@@ -328,3 +328,92 @@ input, select {
   background: white;
   padding-top: 10px;
 }
+
+/* ============================= */
+/* 📱 MOBILNÍ RESPONSIVE VERZE */
+/* ============================= */
+@media (max-width: 900px) {
+
+  .container {
+    padding: 12px;
+  }
+
+  .topbar-inner {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .menu-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .menu-date {
+    justify-content: space-between;
+  }
+
+  .user-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .user-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .user-actions .btn {
+    width: 100%;
+  }
+
+  .menu-item {
+    font-size: 16px;
+    padding: 16px;
+  }
+
+  .cart-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .cart-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .cart-actions .btn {
+    flex: 1;
+  }
+
+  .admin-col {
+    padding: 12px;
+  }
+
+  .food-row,
+  .day-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .modal {
+    width: 95%;
+    min-width: auto;
+  }
+
+  .btn {
+    font-size: 15px;
+    padding: 12px;
+  }
+
+}
