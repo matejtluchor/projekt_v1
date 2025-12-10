@@ -10,7 +10,9 @@ function fmt(v) {
   return v + " Kč";
 }
 
-// MODAL OKNO
+// -----------------------------------------------------
+//  MODAL
+// -----------------------------------------------------
 function showModal(title, text) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
@@ -30,11 +32,18 @@ function showModal(title, text) {
 }
 
 // -----------------------------------------------------
-//  SPOLEČNÁ FUNKCE PO ÚSPĚŠNÉM LOGINU / REGISTRACI
+//  SPOLEČNÁ FUNKCE PO LOGINU / REGISTRACI + AUTO LOGIN
 // -----------------------------------------------------
 function afterAuth(identifier, data) {
   currentUserId = data.userId;
   isAdmin = data.role === "admin" || data.role === "manager";
+
+  localStorage.setItem("user", JSON.stringify({
+    userId: data.userId,
+    name: identifier,
+    isAdmin,
+    credit: data.credit
+  }));
 
   $("loggedUser").textContent = "Uživatel: " + identifier;
   $("logoutBtn").classList.remove("hidden");
@@ -45,7 +54,7 @@ function afterAuth(identifier, data) {
 
   $("menu").classList.remove("hidden");
   $("order").classList.remove("hidden");
-  renderCart(); // zobrazí "Košík je prázdný"
+  renderCart();
 
   populateDates();
   loadMenu();
@@ -61,17 +70,33 @@ function afterAuth(identifier, data) {
 
     loadFoods();
     loadAdminMenu();
-    loadAdminStats();      // TRŽBY + TOP JÍDLA
-    loadDailyStats();      // DENNÍ SOUČET
+    loadAdminStats();
+    loadDailyStats();
   }
 }
+
+// -----------------------------------------------------
+//  AUTO LOGIN PO REFRESHI
+// -----------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+  const saved = localStorage.getItem("user");
+  if (!saved) return;
+
+  const u = JSON.parse(saved);
+
+  afterAuth(u.name, {
+    userId: u.userId,
+    role: u.isAdmin ? "admin" : "user",
+    credit: u.credit
+  });
+});
 
 // -----------------------------------------------------
 //  LOGIN
 // -----------------------------------------------------
 async function login() {
   const ident = $("loginInput").value.trim();
-  const pass = $("adminPassword").value; // používáme jako normální heslo
+  const pass = $("adminPassword").value;
 
   const r = await fetch("/api/login", {
     method: "POST",
@@ -84,18 +109,18 @@ async function login() {
     return showModal("Chyba", d.error || "Přihlášení se nezdařilo.");
   }
 
-  afterAuth(d.identifier || ident, d);
+  afterAuth(ident, d);
 }
 
 // -----------------------------------------------------
-//  REGISTRACE (AUTO LOGIN)
+//  REGISTRACE
 // -----------------------------------------------------
 async function registerUser() {
   const ident = $("loginInput").value.trim();
   const pass = $("adminPassword").value;
 
   if (!ident || !pass) {
-    return showModal("Chyba", "Vyplň uživatelské jméno i heslo.");
+    return showModal("Chyba", "Vyplň jméno i heslo.");
   }
 
   const r = await fetch("/api/register", {
@@ -105,17 +130,20 @@ async function registerUser() {
   });
 
   const d = await r.json();
+  if (!d.success) return showModal("Chyba", d.error);
 
-  if (!d.success) {
-    return showModal("Chyba", d.error || "Registrace se nezdařila.");
-  }
-
-  // auto-login
-  afterAuth(d.identifier || ident, d);
+  afterAuth(ident, d);
 }
 
-// ---------- LOGOUT ----------
-$("logoutBtn").onclick = () => location.reload();
+// -----------------------------------------------------
+//  LOGOUT
+// -----------------------------------------------------
+$("logoutBtn").onclick = () => {
+  localStorage.removeItem("user");
+  location.reload();
+};
+
+
 
 // ---------- DATUMY ----------
 function populateDates() {
