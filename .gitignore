@@ -1,0 +1,34 @@
+# Node balíčky
+backend/node_modules
+frontend/node_modules
+
+# Environment proměnné (hesla, databáze)
+.env
+
+# Databázové lokální soubory (kdybys někdy vrátil SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Logy
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Cache a build složky
+.cache
+dist
+build
+
+# Systémové bordely
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode
+.idea
+
+# Dočasné soubory
+*.tmp
+*.temp
