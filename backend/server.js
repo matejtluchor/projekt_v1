@@ -1,343 +1,603 @@
+// backend/server.js
 const express = require("express");
-const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
+const { Pool } = require("pg");
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../frontend")));
 
-const db = new sqlite3.Database("./database.db");
+// -----------------------------------------------------
+//  POSTGRESQL PŘIPOJENÍ
+// -----------------------------------------------------
+// Na Renderu nastavíš proměnnou DATABASE_URL
+// = "Internal Database URL" z tvé Postgres DB (jidelnapp-db).
 
-// ---------- TABULKY ----------
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    identifier TEXT UNIQUE,
-    credit INTEGER DEFAULT 0
-  )`);
+if (!process.env.DATABASE_URL) {
+  console.warn(
+    "⚠️  DATABASE_URL není nastavená. Nastav ji na Renderu (Internal Database URL z Postgres DB)."
+  );
+}
 
-  db.run(`CREATE TABLE IF NOT EXISTS foods (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    price INTEGER
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS menu (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT,
-    foodId INTEGER,
-    maxCount INTEGER,
-    ordered INTEGER DEFAULT 0
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS orders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId INTEGER,
-    date TEXT,
-    itemNames TEXT,
-    price INTEGER,
-    status TEXT DEFAULT 'ok'
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS topups (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId INTEGER,
-    amount INTEGER,
-    done INTEGER DEFAULT 0
-  )`);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Render interní URL už má v sobě nastavené sslmode, takže
+  // tady nic dalšího řešit nemusíme.
 });
 
-// ADMIN + MANAGER
+// -----------------------------------------------------
+//  VYTVOŘENÍ TABULEK (při startu backendu)
+// -----------------------------------------------------
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      identifier TEXT UNIQUE,
+      credit INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS foods (
+      id SERIAL PRIMARY KEY,
+      name TEXT,
+      price INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS menu (
+      id SERIAL PRIMARY KEY,
+      date TEXT,
+      foodId INTEGER REFERENCES foods(id),
+      maxCount INTEGER,
+      ordered INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS orders (
+      id SERIAL PRIMARY KEY,
+      userId INTEGER REFERENCES users(id),
+      date TEXT,
+      itemNames TEXT,
+      price INTEGER,
+      status TEXT DEFAULT 'ok'
+    );
+
+    CREATE TABLE IF NOT EXISTS topups (
+      id SERIAL PRIMARY KEY,
+      userId INTEGER REFERENCES users(id),
+      amount INTEGER,
+      done INTEGER DEFAULT 0
+    );
+  `);
+
+  console.log("✅ PostgreSQL tabulky jsou připravené");
+}
+
+// -----------------------------------------------------
+//  ADMIN / MANAGER
+// -----------------------------------------------------
 const ADMINS = {
   admin: "1973",
-  manager: "123"
+  manager: "123",
 };
 
-// ---------- LOGIN ----------
-app.post("/api/login", (req, res) => {
-  const { identifier, password } = req.body;
+// -----------------------------------------------------
+//  LOGIN
+// -----------------------------------------------------
+app.post("/api/login", async (req, res) => {
+  try {
+    const { identifier, password } = req.body;
 
-  if (ADMINS[identifier] && ADMINS[identifier] !== password) {
-    return res.json({ success: false, error: "Špatné heslo" });
-  }
+    // kontrola admin hesla
+    if (ADMINS[identifier] && ADMINS[identifier] !== password) {
+      return res.json({ success: false, error: "Špatné heslo" });
+    }
 
-  db.get("SELECT * FROM users WHERE identifier=?", [identifier], (e, row) => {
-    if (!row) {
-      db.run(
-        "INSERT INTO users(identifier,credit) VALUES(?,0)",
-        [identifier],
-        function () {
-          res.json({
-            success: true,
-            userId: this.lastID,
-            credit: 0,
-            role: ADMINS[identifier] ? "admin" : "user"
-          });
-        }
+    const result = await pool.query(
+      "SELECT * FROM users WHERE identifier = $1",
+      [identifier]
+    );
+
+    let user;
+
+    if (result.rowCount === 0) {
+      const insert = await pool.query(
+        "INSERT INTO users (identifier, credit) VALUES ($1, 0) RETURNING id, credit",
+        [identifier]
       );
+      user = insert.rows[0];
     } else {
-      res.json({
-        success: true,
-        userId: row.id,
-        credit: row.credit,
-        role: ADMINS[identifier] ? "admin" : "user"
-      });
+      user = result.rows[0];
     }
-  });
+
+    res.json({
+      success: true,
+      userId: user.id,
+      credit: user.credit,
+      role: ADMINS[identifier] ? "admin" : "user",
+    });
+  } catch (err) {
+    console.error("LOGIN error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
 });
 
-// ---------- FOODS ----------
-app.get("/api/foods", (req, res) => {
-  db.all("SELECT * FROM foods", (e, rows) => res.json(rows || []));
+// -----------------------------------------------------
+//  FOODS
+// -----------------------------------------------------
+app.get("/api/foods", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM foods ORDER BY id ASC");
+    res.json(result.rows || []);
+  } catch (err) {
+    console.error("GET /api/foods error:", err);
+    res.status(500).json([]);
+  }
 });
 
-// ---------- ADMIN MENU ----------
-app.get("/api/admin/menu", (req, res) => {
-  const date = req.query.date;
+// -----------------------------------------------------
+//  ADMIN MENU
+// -----------------------------------------------------
+app.get("/api/admin/menu", async (req, res) => {
+  try {
+    const date = req.query.date;
+    const result = await pool.query(
+      `
+      SELECT menu.id, foods.name, foods.price, menu.maxCount
+      FROM menu 
+      JOIN foods ON foods.id = menu.foodId
+      WHERE menu.date = $1
+      ORDER BY menu.id ASC
+    `,
+      [date]
+    );
 
-  db.all(
-    `SELECT menu.id, foods.name, foods.price, menu.maxCount
-     FROM menu JOIN foods ON foods.id = menu.foodId
-     WHERE menu.date = ?`,
-    [date],
-    (e, rows) => res.json(rows || [])
-  );
+    res.json(result.rows || []);
+  } catch (err) {
+    console.error("GET /api/admin/menu error:", err);
+    res.status(500).json([]);
+  }
 });
 
-app.post("/api/admin/menu/add", (req, res) => {
-  const { date, foodId, maxCount } = req.body;
+app.post("/api/admin/menu/add", async (req, res) => {
+  try {
+    const { date, foodId, maxCount } = req.body;
 
-  db.run(
-    "INSERT INTO menu(date,foodId,maxCount,ordered) VALUES(?,?,?,0)",
-    [date, foodId, maxCount],
-    function () {
-      db.all(
-        `SELECT menu.id, foods.name, foods.price, menu.maxCount
-         FROM menu JOIN foods ON foods.id = menu.foodId
-         WHERE menu.date = ?`,
-        [date],
-        (e, rows) => res.json({ success: true, items: rows || [] })
-      );
+    await pool.query(
+      "INSERT INTO menu (date, foodId, maxCount, ordered) VALUES ($1, $2, $3, 0)",
+      [date, foodId, maxCount]
+    );
+
+    const items = await pool.query(
+      `
+      SELECT menu.id, foods.name, foods.price, menu.maxCount
+      FROM menu 
+      JOIN foods ON foods.id = menu.foodId
+      WHERE menu.date = $1
+      ORDER BY menu.id ASC
+    `,
+      [date]
+    );
+
+    res.json({ success: true, items: items.rows || [] });
+  } catch (err) {
+    console.error("POST /api/admin/menu/add error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+app.post("/api/admin/menu/update", async (req, res) => {
+  try {
+    const { id, maxCount } = req.body;
+    await pool.query("UPDATE menu SET maxCount = $1 WHERE id = $2", [
+      maxCount,
+      id,
+    ]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("POST /api/admin/menu/update error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+app.post("/api/admin/menu/delete", async (req, res) => {
+  try {
+    await pool.query("DELETE FROM menu WHERE id = $1", [req.body.id]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("POST /api/admin/menu/delete error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
+});
+
+// -----------------------------------------------------
+//  MENU PRO UŽIVATELE
+// -----------------------------------------------------
+app.get("/api/menu", async (req, res) => {
+  try {
+    const date = req.query.date;
+
+    const result = await pool.query(
+      `
+      SELECT foods.name, foods.price, menu.maxCount, menu.ordered
+      FROM menu 
+      JOIN foods ON foods.id = menu.foodId
+      WHERE menu.date = $1
+      ORDER BY menu.id ASC
+    `,
+      [date]
+    );
+
+    const rows = result.rows || [];
+
+    res.json(
+      rows.map((r) => ({
+        name: r.name,
+        price: r.price,
+        maxCount: r.maxcount,
+        remaining: r.maxcount - r.ordered,
+      }))
+    );
+  } catch (err) {
+    console.error("GET /api/menu error:", err);
+    res.status(500).json([]);
+  }
+});
+
+// -----------------------------------------------------
+//  OBJEDNÁVKA + KONTROLA SKLADU
+// -----------------------------------------------------
+app.post("/api/order", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { userId, date, items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.json({ success: false, error: "Prázdná objednávka" });
     }
-  );
-});
 
-app.post("/api/admin/menu/update", (req, res) => {
-  const { id, maxCount } = req.body;
-  db.run("UPDATE menu SET maxCount=? WHERE id=?", [maxCount, id], () =>
-    res.json({ success: true })
-  );
-});
+    const total = items.reduce((s, i) => s + i.price, 0);
 
-app.post("/api/admin/menu/delete", (req, res) => {
-  db.run("DELETE FROM menu WHERE id=?", [req.body.id], () =>
-    res.json({ success: true })
-  );
-});
+    // spočítat kolik kusů od každého jídla
+    const grouped = {};
+    items.forEach((i) => {
+      grouped[i.name] = (grouped[i.name] || 0) + 1;
+    });
 
-// ---------- MENU PRO UŽIVATELE ----------
-app.get("/api/menu", (req, res) => {
-  const date = req.query.date;
+    await client.query("BEGIN");
 
-  db.all(
-    `SELECT foods.name, foods.price, menu.maxCount, menu.ordered
-     FROM menu JOIN foods ON foods.id = menu.foodId
-     WHERE menu.date=?`,
-    [date],
-    (e, rows) => {
-      res.json(
-        (rows || []).map(r => ({
-          name: r.name,
-          price: r.price,
-          maxCount: r.maxCount,
-          remaining: r.maxCount - r.ordered
-        }))
-      );
-    }
-  );
-});
+    // sklad
+    const menuRes = await client.query(
+      `
+      SELECT foods.name, menu.maxCount, menu.ordered
+      FROM menu 
+      JOIN foods ON foods.id = menu.foodId
+      WHERE menu.date = $1
+    `,
+      [date]
+    );
+    const menuRows = menuRes.rows || [];
 
-// ---------- OBJEDNÁVKA + KONTROLA SKLADU ----------
-app.post("/api/order", (req, res) => {
-  const { userId, date, items } = req.body;
-  const total = items.reduce((s, i) => s + i.price, 0);
-
-  const grouped = {};
-  items.forEach(i => grouped[i.name] = (grouped[i.name] || 0) + 1);
-
-  db.all(
-    `SELECT foods.name, menu.maxCount, menu.ordered
-     FROM menu JOIN foods ON foods.id = menu.foodId
-     WHERE menu.date=?`,
-    [date],
-    (err, rows) => {
-      for (let n in grouped) {
-        const row = rows.find(r => r.name === n);
-        if (!row || row.ordered + grouped[n] > row.maxCount) {
-          return res.json({ success: false, error: "Není dostatek kusů na skladě" });
-        }
-      }
-
-      db.get("SELECT credit FROM users WHERE id=?", [userId], (e, u) => {
-        if (u.credit < total)
-          return res.json({ success: false, error: "Nedostatečný kredit" });
-
-        db.run("UPDATE users SET credit=credit-? WHERE id=?", [total, userId]);
-
-        items.forEach(i => {
-          db.run(
-            `UPDATE menu SET ordered=ordered+1 
-             WHERE date=? AND foodId=(SELECT id FROM foods WHERE name=?)`,
-            [date, i.name]
-          );
+    for (const name in grouped) {
+      const row = menuRows.find((r) => r.name === name);
+      if (!row || row.ordered + grouped[name] > row.maxcount) {
+        await client.query("ROLLBACK");
+        return res.json({
+          success: false,
+          error: "Není dostatek kusů na skladě",
         });
-
-        db.run(
-          "INSERT INTO orders(userId,date,itemNames,price,status) VALUES(?,?,?,?,?)",
-          [userId, date, items.map(i => i.name).join(", "), total, "ok"]
-        );
-
-        res.json({ success: true, credit: u.credit - total });
-      });
+      }
     }
-  );
+
+    // kredit uživatele (lockneme řádek)
+    const userRes = await client.query(
+      "SELECT credit FROM users WHERE id = $1 FOR UPDATE",
+      [userId]
+    );
+    if (userRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.json({ success: false, error: "Uživatel neexistuje" });
+    }
+    const currentCredit = userRes.rows[0].credit;
+
+    if (currentCredit < total) {
+      await client.query("ROLLBACK");
+      return res.json({ success: false, error: "Nedostatečný kredit" });
+    }
+
+    // odečíst kredit
+    await client.query(
+      "UPDATE users SET credit = credit - $1 WHERE id = $2",
+      [total, userId]
+    );
+
+    // aktualizovat objednané kusy v menu
+    for (const name in grouped) {
+      const count = grouped[name];
+
+      await client.query(
+        `
+        UPDATE menu 
+        SET ordered = ordered + $1
+        WHERE date = $2
+          AND foodId = (SELECT id FROM foods WHERE name = $3)
+      `,
+        [count, date, name]
+      );
+    }
+
+    const itemsStr = items.map((i) => i.name).join(", ");
+
+    await client.query(
+      `
+      INSERT INTO orders (userId, date, itemNames, price, status)
+      VALUES ($1, $2, $3, $4, $5)
+    `,
+      [userId, date, itemsStr, total, "ok"]
+    );
+
+    await client.query("COMMIT");
+
+    res.json({ success: true, credit: currentCredit - total });
+  } catch (err) {
+    console.error("POST /api/order error:", err);
+    try {
+      await pool.query("ROLLBACK");
+    } catch (_) {}
+    res.status(500).json({ success: false, error: "Server error" });
+  } finally {
+    client.release();
+  }
 });
 
-// ---------- HISTORIE ----------
-app.get("/api/orders/history", (req, res) => {
-  db.all(
-    "SELECT id, date, itemNames, price FROM orders WHERE userId=? AND status='ok' ORDER BY date DESC",
-    [req.query.userId],
-    (err, rows) => res.json(rows || [])
-  );
+// -----------------------------------------------------
+//  HISTORIE OBJEDNÁVEK
+// -----------------------------------------------------
+app.get("/api/orders/history", async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    const result = await pool.query(
+      `
+      SELECT id, date, itemNames, price 
+      FROM orders
+      WHERE userId = $1 AND status = 'ok'
+      ORDER BY date DESC, id DESC
+    `,
+      [userId]
+    );
+
+    res.json(result.rows || []);
+  } catch (err) {
+    console.error("GET /api/orders/history error:", err);
+    res.status(500).json([]);
+  }
 });
 
-// ---------- ZRUŠENÍ OBJEDNÁVKY ----------
-app.post("/api/orders/cancel", (req, res) => {
-  const { orderId } = req.body;
+// -----------------------------------------------------
+//  ZRUŠENÍ OBJEDNÁVKY
+// -----------------------------------------------------
+app.post("/api/orders/cancel", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { orderId } = req.body;
 
-  db.get("SELECT * FROM orders WHERE id=?", [orderId], (e, order) => {
-    if (!order) return res.json({ success: false });
+    await client.query("BEGIN");
+
+    const orderRes = await client.query(
+      "SELECT * FROM orders WHERE id = $1",
+      [orderId]
+    );
+    if (orderRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.json({ success: false });
+    }
+
+    const order = orderRes.rows[0];
 
     const today = new Date().toISOString().slice(0, 10);
     if (order.date <= today) {
-      return res.json({ success: false, error: "Objednávku lze zrušit jen den dopředu!" });
+      await client.query("ROLLBACK");
+      return res.json({
+        success: false,
+        error: "Objednávku lze zrušit jen den dopředu!",
+      });
     }
 
-    const items = order.itemNames.split(", ");
+    const items = order.itemnames.split(", ");
 
-    items.forEach(name => {
-      db.run(
-        `UPDATE menu SET ordered=ordered-1 
-         WHERE date=? AND foodId=(SELECT id FROM foods WHERE name=?)`,
+    for (const name of items) {
+      await client.query(
+        `
+        UPDATE menu 
+        SET ordered = ordered - 1
+        WHERE date = $1 
+          AND foodId = (SELECT id FROM foods WHERE name = $2)
+      `,
         [order.date, name]
       );
-    });
+    }
 
-    db.run(
-      "UPDATE users SET credit = credit + ? WHERE id=?",
-      [order.price, order.userId],
-      () => {
-        db.run(
-          "UPDATE orders SET status='cancelled' WHERE id=?",
-          [orderId],
-          () => {
-            db.get(
-              "SELECT credit FROM users WHERE id=?",
-              [order.userId],
-              (err2, u) => {
-                res.json({ success: true, credit: u ? u.credit : undefined });
-              }
-            );
-          }
-        );
-      }
+    await client.query(
+      "UPDATE users SET credit = credit + $1 WHERE id = $2",
+      [order.price, order.userid]
     );
-  });
+
+    await client.query("UPDATE orders SET status = 'cancelled' WHERE id = $1", [
+      orderId,
+    ]);
+
+    const userRes = await client.query(
+      "SELECT credit FROM users WHERE id = $1",
+      [order.userid]
+    );
+    const credit = userRes.rowCount ? userRes.rows[0].credit : undefined;
+
+    await client.query("COMMIT");
+
+    res.json({ success: true, credit });
+  } catch (err) {
+    console.error("POST /api/orders/cancel error:", err);
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+    res.status(500).json({ success: false, error: "Server error" });
+  } finally {
+    client.release();
+  }
 });
 
-// ---------- QR ----------
-app.post("/api/topup", (req, res) => {
-  db.run(
-    "INSERT INTO topups(userId,amount,done) VALUES(?,?,0)",
-    [req.body.userId, req.body.amount],
-    function () {
-      res.json({
-        success: true,
-        paymentId: this.lastID,
-        qr: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${this.lastID}`
-      });
-    }
-  );
-});
+// -----------------------------------------------------
+//  QR DOBÍJENÍ
+// -----------------------------------------------------
+app.post("/api/topup", async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
 
-app.get("/api/topup/status", (req, res) => {
-  db.get("SELECT * FROM topups WHERE id=?", [req.query.id], (e, r) => {
-    if (!r) return res.json({ done: false, credit: 0 });
+    const result = await pool.query(
+      `
+      INSERT INTO topups (userId, amount, done)
+      VALUES ($1, $2, 0)
+      RETURNING id
+    `,
+      [userId, amount]
+    );
 
-    if (!r.done) {
-      db.run("UPDATE topups SET done=1 WHERE id=?", [r.id]);
-      db.run("UPDATE users SET credit = credit + ? WHERE id=?", [r.amount, r.userId]);
-    }
+    const paymentId = result.rows[0].id;
 
-    db.get("SELECT credit FROM users WHERE id=?", [r.userId], (e2, u) => {
-      res.json({ done: true, credit: u.credit });
+    res.json({
+      success: true,
+      paymentId,
+      qr: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${paymentId}`,
     });
-  });
+  } catch (err) {
+    console.error("POST /api/topup error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
+  }
 });
 
-// ---------- STATISTIKY – 30 DNÍ ----------
-app.get("/api/admin/stats/month", (req, res) => {
-  const since = new Date();
-  since.setDate(since.getDate() - 30);
-  const dateStr = since.toISOString().slice(0, 10);
+app.get("/api/topup/status", async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const id = req.query.id;
 
-  db.all(
-    "SELECT itemNames, price FROM orders WHERE date >= ? AND status='ok'",
-    [dateStr],
-    (err, rows) => {
-      let total = 0;
-      const foods = {};
+    await client.query("BEGIN");
 
-      rows.forEach(o => {
-        total += o.price;
-        o.itemNames.split(", ").forEach(n => {
-          foods[n] = (foods[n] || 0) + 1;
-        });
-      });
-
-      const topFoods = Object.entries(foods)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
-
-      res.json({ total, topFoods });
+    const topRes = await client.query("SELECT * FROM topups WHERE id = $1", [
+      id,
+    ]);
+    if (topRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.json({ done: false, credit: 0 });
     }
-  );
-});
 
-// ---------- SOUČET OBJEDNÁVEK NA DEN ----------
-app.get("/api/admin/stats/day", (req, res) => {
-  const date = req.query.date;
+    const topup = topRes.rows[0];
 
-  db.all(
-    "SELECT itemNames FROM orders WHERE date=? AND status='ok'",
-    [date],
-    (err, rows) => {
-      const sum = {};
-
-      rows.forEach(o => {
-        o.itemNames.split(", ").forEach(n => {
-          sum[n] = (sum[n] || 0) + 1;
-        });
-      });
-
-      res.json(sum);
+    if (!topup.done) {
+      await client.query("UPDATE topups SET done = 1 WHERE id = $1", [id]);
+      await client.query(
+        "UPDATE users SET credit = credit + $1 WHERE id = $2",
+        [topup.amount, topup.userid]
+      );
     }
-  );
+
+    const userRes = await client.query(
+      "SELECT credit FROM users WHERE id = $1",
+      [topup.userid]
+    );
+    const credit = userRes.rowCount ? userRes.rows[0].credit : 0;
+
+    await client.query("COMMIT");
+
+    res.json({ done: true, credit });
+  } catch (err) {
+    console.error("GET /api/topup/status error:", err);
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+    res.status(500).json({ done: false, credit: 0 });
+  } finally {
+    client.release();
+  }
 });
 
+// -----------------------------------------------------
+//  STATISTIKY – POSLEDNÍCH 30 DNÍ
+// -----------------------------------------------------
+app.get("/api/admin/stats/month", async (req, res) => {
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const dateStr = since.toISOString().slice(0, 10);
+
+    const result = await pool.query(
+      `
+      SELECT itemNames, price 
+      FROM orders 
+      WHERE date >= $1 AND status = 'ok'
+    `,
+      [dateStr]
+    );
+
+    let total = 0;
+    const foods = {};
+
+    result.rows.forEach((o) => {
+      total += o.price;
+      o.itemnames.split(", ").forEach((n) => {
+        foods[n] = (foods[n] || 0) + 1;
+      });
+    });
+
+    const topFoods = Object.entries(foods)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    res.json({ total, topFoods });
+  } catch (err) {
+    console.error("GET /api/admin/stats/month error:", err);
+    res.status(500).json({ total: 0, topFoods: [] });
+  }
+});
+
+// -----------------------------------------------------
+//  STATISTIKY – SOUČET OBJEDNÁVEK NA DEN
+// -----------------------------------------------------
+app.get("/api/admin/stats/day", async (req, res) => {
+  try {
+    const date = req.query.date;
+
+    const result = await pool.query(
+      `
+      SELECT itemNames 
+      FROM orders 
+      WHERE date = $1 AND status = 'ok'
+    `,
+      [date]
+    );
+
+    const sum = {};
+    result.rows.forEach((o) => {
+      o.itemnames.split(", ").forEach((n) => {
+        sum[n] = (sum[n] || 0) + 1;
+      });
+    });
+
+    res.json(sum);
+  } catch (err) {
+    console.error("GET /api/admin/stats/day error:", err);
+    res.status(500).json({});
+  }
+});
+
+// -----------------------------------------------------
+//  START SERVERU – nejdřív init DB, pak posloucháme
+// -----------------------------------------------------
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log("✅ Backend běží na portu " + PORT);
-});
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log("✅ Backend běží na portu " + PORT);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ Chyba při inicializaci databáze:", err);
+    process.exit(1);
+  });
