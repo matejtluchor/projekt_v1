@@ -698,20 +698,6 @@ app.get("/api/admin/stats/day", async (req, res) => {
   }
 });
 
-// ⚠️ DOČASNÉ! SMAZAT PO POUŽITÍ!
-// Smazání testovacích uživatelů (GET i POST)
-app.get("/dev/delete-users", async (req, res) => {
-  try {
-    await pool.query("DELETE FROM users WHERE identifier IN ('matej', 'test')");
-    res.json({ success: true, deleted: ["matej", "test"] });
-  } catch (err) {
-    console.error(err);
-    res.json({ success: false });
-  }
-});
-
-
-
 // -----------------------------------------------------
 //  START SERVERU – nejdřív init DB, pak posloucháme
 // -----------------------------------------------------
