@@ -699,8 +699,8 @@ app.get("/api/admin/stats/day", async (req, res) => {
 });
 
 // ⚠️ DOČASNÉ! SMAZAT PO POUŽITÍ!
-// Smazání testovacích uživatelů
-app.post("/dev/delete-users", async (req, res) => {
+// Smazání testovacích uživatelů (GET i POST)
+app.get("/dev/delete-users", async (req, res) => {
   try {
     await pool.query("DELETE FROM users WHERE identifier IN ('matej', 'test')");
     res.json({ success: true, deleted: ["matej", "test"] });
