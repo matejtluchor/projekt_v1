@@ -1,0 +1,39 @@
+name: Daily Database Backup
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # každý den v 02:00
+  workflow_dispatch:       # umožní ruční spuštění
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install PostgreSQL client
+      run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+    - name: Run pg_dump backup
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      run: |
+        mkdir -p backups
+        FILE="backups/backup-$(date +'%Y-%m-%d_%H-%M').sql"
+        pg_dump "$DATABASE_URL" > "$FILE"
+        echo "Backup created: $FILE"
+
+    - name: Commit backup
+      run: |
+        git config --global user.name "github-backup-bot"
+        git config --global user.email "backup@example.com"
+        git add backups/*.sql || true
+        git commit -m "Automated backup: $(date)" || true
+
+    - name: Push backup
+      uses: ad-m/github-push-action@v0.6.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: main
