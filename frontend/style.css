@@ -111,6 +111,35 @@ input, select {
   color: white;
 }
 
+/* QR BOX */
+.qr-box {
+  text-align: center;
+  padding: 15px;
+}
+.qr-box img {
+  max-width: 240px;
+  border-radius: 10px;
+  margin-top: 10px;
+}
+
+/* ADMIN TOPUPS */
+#adminTopups .topup-card {
+  background: #e5edff;
+  padding: 14px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#adminTopups .topup-card strong {
+  color: #0a3a6b;
+}
+#adminTopups .topup-card .btn-success {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
 /* USER */
 .user-row {
   display: flex;
@@ -198,10 +227,6 @@ input, select {
   cursor: pointer;
 }
 
-.day-row button:hover {
-  opacity: 0.85;
-}
-
 /* MENU */
 .menu-item {
   padding: 14px;
@@ -210,10 +235,6 @@ input, select {
   margin-bottom: 12px;
   cursor: pointer;
   font-weight: 600;
-}
-
-.menu-item:hover {
-  background: #e5edff;
 }
 
 .menu-item.soldout {
@@ -229,28 +250,11 @@ input, select {
   padding: 6px 0;
 }
 
-.cart-main {
-  flex: 1;
-}
-
 .cart-actions {
   display: flex;
   gap: 6px;
 }
 
-.cart-empty {
-  font-size: 14px;
-  color: var(--muted);
-  list-style: none;
-  padding: 4px 0;
-}
-
-.btn-sm {
-  padding: 5px 10px;
-  font-size: 12px;
-}
-
-/* TOAST */
 .toast-root {
   position: fixed;
   right: 20px;
@@ -276,201 +280,8 @@ input, select {
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* MODAL */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-}
-
-.modal {
-  background: white;
-  color: black;
-  padding: 30px;
-  border-radius: 14px;
-  min-width: 320px;
-  max-width: 90%;
-  box-shadow: var(--shadow);
-  text-align: center;
-}
-
-.modal h3 {
-  margin-top: 0;
-}
-
-.modal button {
-  margin-top: 15px;
-  width: 100%;
-}
-
-.cart-bottom {
-  position: sticky;
-  bottom: 0;
-  background: white;
-  padding-top: 10px;
-}
-
-.menu-date select {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 2px solid var(--accent);
-  font-weight: 600;
-  background: #f1f5f9;
-}
-
-.cart-bottom {
-  position: sticky;
-  bottom: 0;
-  background: white;
-  padding-top: 10px;
-}
-
-/* ============================= */
-/* 📱 MOBILNÍ RESPONSIVE VERZE */
-/* ============================= */
+/* RESPONSIVE */
 @media (max-width: 900px) {
-
-  .container {
-    padding: 12px;
-  }
-
-  .topbar-inner {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
-  }
-
-  .grid {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .menu-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .menu-date {
-    justify-content: space-between;
-  }
-
-  .user-row {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .user-actions {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  .user-actions .btn {
-    width: 100%;
-  }
-
-  .menu-item {
-    font-size: 16px;
-    padding: 16px;
-  }
-
-  .cart-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
-  .cart-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .cart-actions .btn {
-    flex: 1;
-  }
-
-  .admin-col {
-    padding: 12px;
-  }
-
-  .food-row,
-  .day-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-  }
-
-  .modal {
-    width: 95%;
-    min-width: auto;
-  }
-
-  .btn {
-    font-size: 15px;
-    padding: 12px;
-  }
-
-}
-
-/* ===========================
-   📱 MOBILNÍ ÚPRAVY ADMINU
-   =========================== */
-@media (max-width: 768px) {
-
-  /* ADMIN GRID → pod sebe */
-  .admin-grid {
-    grid-template-columns: 1fr;
-  }
-
-  /* ADMIN bloky vzdušnější */
-  .admin-col {
-    padding: 16px;
-  }
-
-  /* Statistiky karty menší */
-  #adminStats,
-  #dailyStatsOutput {
-    font-size: 15px;
-    line-height: 1.4;
-  }
-
-  /* Nadpisy v adminu menší */
-  .admin-subtitle {
-    font-size: 16px;
-    margin-top: 20px;
-  }
-
-  /* Řádky jídel v adminu na výšku */
-  .food-row,
-  .day-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .food-row button,
-  .day-row button {
-    width: 100%;
-    margin-top: 8px;
-  }
-
-  .day-row input {
-    width: 100%;
-  }
-
-  /* ADMIN datum */
-  #adminDate,
-  #statsDate {
-    width: 100%;
-  }
-
-  /* MENU TVORBA sekce přehlednější */
-  #admin {
-    padding-bottom: 80px;
-  }
+  .grid { grid-template-columns: 1fr; }
+  .admin-grid { grid-template-columns: 1fr; }
 }

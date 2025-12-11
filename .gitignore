@@ -1,34 +1,58 @@
-# Node balíčky
+# --------------------------------------------------
+# NODE MODULES (backend + frontend)
+# --------------------------------------------------
 backend/node_modules
 frontend/node_modules
+node_modules
 
-# Environment proměnné (hesla, databáze)
+# --------------------------------------------------
+# ENVIRONMENT PROMĚNNÉ
+# (Na Renderu jsou nastavené přes Dashboard)
+# --------------------------------------------------
 .env
+.env.local
+.env.*.local
 
-# Databázové lokální soubory (kdybys někdy vrátil SQLite)
+# --------------------------------------------------
+# LOKÁLNÍ DATABÁZE (SQLite) – Render používá PostgreSQL
+# --------------------------------------------------
 *.db
 *.sqlite
 *.sqlite3
 
-# Logy
+# --------------------------------------------------
+# LOGY
+# --------------------------------------------------
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Cache a build složky
+# --------------------------------------------------
+# CACHE A BUILD
+# --------------------------------------------------
 .cache
 dist
 build
 
-# Systémové bordely
+# Vite / Parcel / Webpack
+.vite
+*.tsbuildinfo
+
+# --------------------------------------------------
+# SYSTÉMOVÉ BORDELY
+# --------------------------------------------------
 .DS_Store
 Thumbs.db
 
-# Editor / IDE
+# --------------------------------------------------
+# EDITORY / IDE
+# --------------------------------------------------
 .vscode
 .idea
 
-# Dočasné soubory
+# --------------------------------------------------
+# DOČASNÉ SOUBORY
+# --------------------------------------------------
 *.tmp
 *.temp

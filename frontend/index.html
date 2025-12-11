@@ -33,6 +33,8 @@
   <div class="login-actions">
     <button id="loginBtn" class="btn btn-primary">Přihlásit</button>
     <button id="registerBtn" class="btn btn-outline">Registrovat</button>
+    <!-- Reset hesla (generování tokenu / potvrzení) -->
+    <button id="resetBtn" class="btn btn-ghost">Reset hesla</button>
   </div>
 </section>
 
@@ -96,6 +98,12 @@
       <h3>📦 Součet objednávek na den</h3>
       <input type="date" id="statsDate">
       <div id="dailyStatsOutput"></div>
+    </div>
+
+    <!-- Pending topupy pro Admin / Manager -->
+    <div class="card">
+      <h3>⏳ Čekající dobíjení (Topups)</h3>
+      <div id="adminTopups">Načítám...</div>
     </div>
 
     <h4 class="admin-subtitle">🍽️ MENU TVORBA</h4>

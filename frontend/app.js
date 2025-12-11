@@ -32,7 +32,7 @@ function showModal(title, text) {
 }
 
 // -----------------------------------------------------
-//  SPOLEČNÁ FUNKCE PO LOGINU / REGISTRACI + AUTO LOGIN
+//  PO LOGINU / REGISTRACI
 // -----------------------------------------------------
 function afterAuth(identifier, data) {
   currentUserId = data.userId;
@@ -72,11 +72,12 @@ function afterAuth(identifier, data) {
     loadAdminMenu();
     loadAdminStats();
     loadDailyStats();
+    loadAdminTopups(); // <-- NOVÉ
   }
 }
 
 // -----------------------------------------------------
-//  AUTO LOGIN PO REFRESHI
+//  AUTO LOGIN
 // -----------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
   const saved = localStorage.getItem("user");
@@ -143,9 +144,9 @@ $("logoutBtn").onclick = () => {
   location.reload();
 };
 
-
-
-// ---------- DATUMY ----------
+// -----------------------------------------------------
+//  DATUMY
+// -----------------------------------------------------
 function populateDates() {
   const s = $("date");
   s.innerHTML = "";
@@ -160,7 +161,9 @@ function populateDates() {
   s.onchange = loadMenu;
 }
 
-// ---------- NAČTENÍ JÍDEL ----------
+// -----------------------------------------------------
+//  JÍDLA
+// -----------------------------------------------------
 async function loadFoods() {
   const r = await fetch("/api/foods");
   const foods = await r.json();
@@ -176,7 +179,9 @@ async function loadFoods() {
   `).join("");
 }
 
-// ---------- ADMIN MENU ----------
+// -----------------------------------------------------
+//  ADMIN MENU
+// -----------------------------------------------------
 function renderAdminMenu(items) {
   $("adminDayMenu").innerHTML = items.map(i => `
     <div class="day-row">
@@ -224,7 +229,9 @@ async function removeFromDay(id) {
   loadAdminMenu();
 }
 
-// ---------- MENU + SKLAD ----------
+// -----------------------------------------------------
+//  MENU + SKLAD
+// -----------------------------------------------------
 async function loadMenu() {
   const date = $("date").value;
   const r = await fetch("/api/menu?date=" + date);
@@ -245,15 +252,16 @@ async function loadMenu() {
     `;
 
     if (m.remaining > 0) {
-      div.addEventListener("click", () => {
-        addToCart(m.price, m.name);
-      });
+      div.addEventListener("click", () => addToCart(m.price, m.name));
     }
 
     list.appendChild(div);
   });
 }
 
+// -----------------------------------------------------
+//  KOŠÍK
+// -----------------------------------------------------
 function addToCart(price, name) {
   const inCart = cart.filter(i => i.name === name).length;
 
@@ -266,7 +274,6 @@ function addToCart(price, name) {
   renderCart();
 }
 
-// ---------- KOŠÍK ----------
 function renderCart() {
   const list = $("orderList");
 
@@ -300,7 +307,9 @@ function changeCart(name, price, delta) {
   }
 }
 
-// ---------- OBJEDNÁVKA ----------
+// -----------------------------------------------------
+//  OBJEDNÁVKA
+// -----------------------------------------------------
 async function sendOrder() {
   if (!cart.length) {
     showModal("Košík je prázdný", "Před odesláním objednávky přidej nějaké jídlo.");
@@ -331,14 +340,21 @@ async function sendOrder() {
   showModal("Hotovo", "Objednávka byla úspěšně odeslána.");
 }
 
-// ---------- QR DOBÍJENÍ ----------
+// -----------------------------------------------------
+//  QR DOBÍJENÍ
+// -----------------------------------------------------
 async function createQr() {
+  const amount = parseInt($("topupAmount").value);
+  if (!amount || amount <= 0) {
+    return showModal("Chyba", "Zadej platnou částku.");
+  }
+
   const r = await fetch("/api/topup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       userId: currentUserId,
-      amount: $("topupAmount").value,
+      amount
     }),
   });
 
@@ -347,6 +363,7 @@ async function createQr() {
 
   if (topupInterval) clearInterval(topupInterval);
 
+  // STATUS — už jen čeká na admin schválení
   topupInterval = setInterval(async () => {
     const s = await (await fetch("/api/topup/status?id=" + d.paymentId)).json();
     $("credit").textContent = fmt(s.credit);
@@ -354,12 +371,56 @@ async function createQr() {
     if (s.done) {
       clearInterval(topupInterval);
       topupInterval = null;
-      showModal("Platba úspěšná", "Kredit byl připsán.");
+      showModal("Hotovo", "Dobití bylo schváleno administrátorem.");
     }
   }, 2000);
 }
 
-// ---------- MOJE OBJEDNÁVKY ----------
+// -----------------------------------------------------
+//  ADMIN – ČEKÁJÍCÍ TOPUPY  (NOVÉ)
+// -----------------------------------------------------
+async function loadAdminTopups() {
+  const r = await fetch("/api/admin/topups");
+  const list = await r.json();
+
+  if (!list.length) {
+    $("adminTopups").innerHTML = "<p>Žádné čekající požadavky.</p>";
+    return;
+  }
+
+  $("adminTopups").innerHTML = list.map(t => `
+    <div class="topup-card">
+      <div>
+        <strong>${t.identifier}</strong><br>
+        ${fmt(t.amount)}
+      </div>
+      <button class="btn btn-success" onclick="approveTopup(${t.id})">
+        Schválit
+      </button>
+    </div>
+  `).join("");
+}
+
+async function approveTopup(id) {
+  const r = await fetch("/api/admin/topups/approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+
+  const d = await r.json();
+
+  if (!d.success) {
+    return showModal("Chyba", "Nepodařilo se schválit dobíjení.");
+  }
+
+  loadAdminTopups();
+  showModal("Hotovo", "Dobití bylo úspěšně schváleno.");
+}
+
+// -----------------------------------------------------
+//  MOJE OBJEDNÁVKY
+// -----------------------------------------------------
 async function showMyOrders() {
   $("myOrders").classList.remove("hidden");
 
@@ -373,14 +434,15 @@ async function showMyOrders() {
 
   $("myOrdersList").innerHTML = orders.map(o => {
     const grouped = {};
-    const namesStr = o.itemNames || o.itemnames || "";
-    namesStr.split(", ").forEach(i => {
-      if (!i) return;
-      grouped[i] = (grouped[i] || 0) + 1;
-    });
+    (o.itemNames || o.itemnames || "")
+      .split(", ")
+      .forEach(i => {
+        if (!i) return;
+        grouped[i] = (grouped[i] || 0) + 1;
+      });
 
     const itemsHtml = Object.entries(grouped)
-      .map(([name, count]) => `${count}× ${name}`)
+      .map(([n, c]) => `${c}× ${n}`)
       .join("<br>");
 
     return `
@@ -406,7 +468,7 @@ async function cancelOrder(orderId) {
   const d = await r.json();
 
   if (!d.success) {
-    showModal("Chyba", d.error || "Zrušení se nezdařilo");
+    showModal("Chyba", d.error || "Zrušení se nepodařilo.");
     return;
   }
 
@@ -419,7 +481,9 @@ async function cancelOrder(orderId) {
   loadMenu();
 }
 
-// ---------- ADMIN STATISTIKY – TRŽBY + TOP JÍDLA ----------
+// -----------------------------------------------------
+//  ADMIN STATISTIKY
+// -----------------------------------------------------
 async function loadAdminStats() {
   const r = await fetch("/api/admin/stats/month");
   const d = await r.json();
@@ -432,7 +496,9 @@ async function loadAdminStats() {
   `;
 }
 
-// ---------- DENNÍ SOUČET OBJEDNÁVEK ----------
+// -----------------------------------------------------
+//  DENNÍ SOUČTY
+// -----------------------------------------------------
 async function loadDailyStats() {
   const date = $("statsDate").value;
   const r = await fetch("/api/admin/stats/day?date=" + date);
@@ -444,19 +510,19 @@ async function loadDailyStats() {
   $("dailyStatsOutput").innerHTML = html || "<p>Žádné objednávky.</p>";
 }
 
-// ---------- EVENTS ----------
+// -----------------------------------------------------
+//  EVENTY
+// -----------------------------------------------------
 $("loginBtn").onclick = login;
-const regBtn = $("registerBtn");
-if (regBtn) {
-  regBtn.onclick = registerUser;
-}
+$("registerBtn").onclick = registerUser;
 $("sendOrderBtn").onclick = sendOrder;
 
-// Dobít kredit – toggle + čištění QR
+// toggle TOPUP sekce
 $("topupBtn").onclick = () => {
   const sec = $("topup");
-  const isHidden = sec.classList.contains("hidden");
-  if (isHidden) {
+  const hidden = sec.classList.contains("hidden");
+
+  if (hidden) {
     sec.classList.remove("hidden");
   } else {
     sec.classList.add("hidden");
@@ -470,7 +536,7 @@ $("topupBtn").onclick = () => {
 
 $("createQrBtn").onclick = createQr;
 
-// Moje objednávky – toggle
+// toggle Moje objednávky
 $("myOrdersBtn2").onclick = () => {
   const sec = $("myOrders");
   if (sec.classList.contains("hidden")) {
