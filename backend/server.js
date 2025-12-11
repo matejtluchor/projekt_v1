@@ -3,40 +3,44 @@ const express = require("express");
 const path = require("path");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
-const crypto = require("crypto");
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../frontend")));
 
 // -----------------------------------------------------
-//  LOGGING
+//  LOGOVÁNÍ REQUESTŮ (pro monitoring na Renderu)
 // -----------------------------------------------------
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
+
 // -----------------------------------------------------
-//  DB CONNECT
+//  POSTGRESQL PŘIPOJENÍ
 // -----------------------------------------------------
+
+if (!process.env.DATABASE_URL) {
+  console.warn(
+    "⚠️  DATABASE_URL není nastavená. Nastav ji na Renderu (Internal Database URL z Postgres DB)."
+  );
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
 // -----------------------------------------------------
-//  DB INIT
+//  VYTVOŘENÍ TABULEK + ÚPRAVA USERS + ADMIN ÚČTY
 // -----------------------------------------------------
 async function initDb() {
+  // základní tabulky
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       identifier TEXT UNIQUE,
-      credit INTEGER DEFAULT 0,
-      password_hash TEXT,
-      role TEXT DEFAULT 'user',
-      reset_token TEXT,
-      reset_expires TIMESTAMP
+      credit INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS foods (
@@ -70,20 +74,38 @@ async function initDb() {
     );
   `);
 
-  // Create admin + manager if missing
-  const seeded = [
+  // přidání sloupců pro heslo + roli (pokud ještě nejsou)
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS password_hash TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
+  `);
+
+  // starým userům bez role nastavíme user
+  await pool.query(`UPDATE users SET role = 'user' WHERE role IS NULL;`);
+
+  // vytvoření / aktualizace admin a manager účtů
+  const adminsToSeed = [
     { identifier: "admin", password: "1973", role: "admin" },
     { identifier: "manager", password: "123", role: "manager" },
   ];
 
-  for (const u of seeded) {
+  for (const u of adminsToSeed) {
     const hash = await bcrypt.hash(u.password, 10);
-    const exists = await pool.query("SELECT id FROM users WHERE identifier = $1", [u.identifier]);
 
-    if (exists.rowCount > 0) {
+    const existing = await pool.query(
+      "SELECT id FROM users WHERE identifier = $1",
+      [u.identifier]
+    );
+
+    if (existing.rowCount > 0) {
       await pool.query(
         "UPDATE users SET role = $1, password_hash = $2 WHERE id = $3",
-        [u.role, hash, exists.rows[0].id]
+        [u.role, hash, existing.rows[0].id]
       );
     } else {
       await pool.query(
@@ -93,20 +115,7 @@ async function initDb() {
     }
   }
 
-  console.log("✅ DB inicializována");
-}
-
-// -----------------------------------------------------
-//  ROLE MIDDLEWARE
-// -----------------------------------------------------
-function requireRole(roles) {
-  return (req, res, next) => {
-    const role = req.headers["x-role"];
-    if (!role || !roles.includes(role)) {
-      return res.status(403).json({ success: false, error: "Nedostatečná oprávnění" });
-    }
-    next();
-  };
+  console.log("✅ PostgreSQL tabulky + uživatelé (admin/manager) připravené");
 }
 
 // -----------------------------------------------------
@@ -114,32 +123,58 @@ function requireRole(roles) {
 // -----------------------------------------------------
 app.post("/api/register", async (req, res) => {
   try {
-    const { identifier, password } = req.body;
+    const { identifier, password } = req.body || {};
 
     if (!identifier || !password) {
-      return res.json({ success: false, error: "Vyplň jméno i heslo." });
+      return res.json({
+        success: false,
+        error: "Vyplň uživatelské jméno i heslo.",
+      });
     }
 
+    // zakážeme použít názvy admin/manager
     if (["admin", "manager"].includes(identifier.toLowerCase())) {
-      return res.json({ success: false, error: "Toto jméno je rezervováno." });
+      return res.json({
+        success: false,
+        error: "Toto jméno je rezervované pro administrátory.",
+      });
     }
 
-    const exists = await pool.query("SELECT id FROM users WHERE identifier = $1", [identifier]);
+    const exists = await pool.query(
+      "SELECT id FROM users WHERE identifier = $1",
+      [identifier]
+    );
     if (exists.rowCount > 0) {
-      return res.json({ success: false, error: "Uživatel už existuje." });
+      return res.json({
+        success: false,
+        error: "Tento uživatel už existuje.",
+      });
     }
 
     const hash = await bcrypt.hash(password, 10);
-    const inserted = await pool.query(
-      "INSERT INTO users (identifier, password_hash, role, credit) VALUES ($1, $2, 'user', 0) RETURNING id, identifier, role, credit",
+
+    const insert = await pool.query(
+      `
+      INSERT INTO users (identifier, password_hash, role, credit)
+      VALUES ($1, $2, 'user', 0)
+      RETURNING id, credit, role, identifier
+    `,
       [identifier, hash]
     );
 
-    const u = inserted.rows[0];
-    res.json({ success: true, userId: u.id, identifier: u.identifier, credit: u.credit, role: u.role });
+    const u = insert.rows[0];
+
+    // AUTO LOGIN po registraci
+    return res.json({
+      success: true,
+      userId: u.id,
+      credit: u.credit,
+      role: u.role,
+      identifier: u.identifier,
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false });
+    console.error("POST /api/register error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
   }
 });
 
@@ -148,105 +183,91 @@ app.post("/api/register", async (req, res) => {
 // -----------------------------------------------------
 app.post("/api/login", async (req, res) => {
   try {
-    const { identifier, password } = req.body;
+    const { identifier, password } = req.body || {};
 
-    const r = await pool.query("SELECT * FROM users WHERE identifier = $1", [identifier]);
-    if (r.rowCount === 0) return res.json({ success: false, error: "Uživatel neexistuje." });
+    if (!identifier || !password) {
+      return res.json({
+        success: false,
+        error: "Vyplň uživatelské jméno i heslo.",
+      });
+    }
 
-    const u = r.rows[0];
-    const ok = await bcrypt.compare(password, u.password_hash || "");
-    if (!ok) return res.json({ success: false, error: "Špatné heslo." });
+    const result = await pool.query(
+      "SELECT id, credit, role, password_hash, identifier FROM users WHERE identifier = $1",
+      [identifier]
+    );
+
+    if (result.rowCount === 0) {
+      return res.json({
+        success: false,
+        error: "Uživatel neexistuje.",
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.password_hash) {
+      return res.json({
+        success: false,
+        error: "Tento účet nemá nastavené heslo.",
+      });
+    }
+
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+      return res.json({
+        success: false,
+        error: "Špatné jméno nebo heslo.",
+      });
+    }
 
     res.json({
       success: true,
-      userId: u.id,
-      credit: u.credit,
-      role: u.role,
-      identifier: u.identifier,
+      userId: user.id,
+      credit: user.credit,
+      role: user.role || "user",
+      identifier: user.identifier,
     });
   } catch (err) {
-    console.error(err);
-    res.json({ success: false });
+    console.error("LOGIN error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
   }
 });
 
 // -----------------------------------------------------
-//  RESET HESLA — NOVINKA
+//  FOODS
 // -----------------------------------------------------
-app.post("/api/reset/request", async (req, res) => {
-  try {
-    const { identifier } = req.body;
-    if (!identifier) return res.json({ success: false, error: "Chybí jméno." });
-
-    const token = crypto.randomBytes(10).toString("hex");
-    const expires = new Date(Date.now() + 30 * 60 * 1000);
-
-    await pool.query(
-      "UPDATE users SET reset_token = $1, reset_expires = $2 WHERE identifier = $3",
-      [token, expires, identifier]
-    );
-
-    res.json({ success: true, token, expires });
-  } catch (err) {
-    res.json({ success: false });
-  }
-});
-
-app.post("/api/reset/confirm", async (req, res) => {
-  try {
-    const { identifier, token, newPassword } = req.body;
-
-    const r = await pool.query(
-      "SELECT * FROM users WHERE identifier = $1 AND reset_token = $2",
-      [identifier, token]
-    );
-
-    if (r.rowCount === 0) return res.json({ success: false, error: "Neplatný token." });
-
-    const u = r.rows[0];
-    if (new Date(u.reset_expires) < new Date())
-      return res.json({ success: false, error: "Token vypršel." });
-
-    const hash = await bcrypt.hash(newPassword, 10);
-
-    await pool.query(
-      "UPDATE users SET password_hash = $1, reset_token = NULL, reset_expires = NULL WHERE id = $2",
-      [hash, u.id]
-    );
-
-    res.json({ success: true });
-  } catch (err) {
-    res.json({ success: false });
-  }
-});
-
-// -----------------------------------------------------
-//  PŮVODNÍ FUNKČNÍ KÓD — BEZ ZMĚN
-// -----------------------------------------------------
-
-// FOODS
 app.get("/api/foods", async (req, res) => {
   try {
-    const r = await pool.query("SELECT * FROM foods ORDER BY id ASC");
-    res.json(r.rows);
-  } catch {
-    res.json([]);
+    const result = await pool.query("SELECT * FROM foods ORDER BY id ASC");
+    res.json(result.rows || []);
+  } catch (err) {
+    console.error("GET /api/foods error:", err);
+    res.status(500).json([]);
   }
 });
 
-// ADMIN MENU
+// -----------------------------------------------------
+//  ADMIN MENU
+// -----------------------------------------------------
 app.get("/api/admin/menu", async (req, res) => {
   try {
     const date = req.query.date;
-    const r = await pool.query(
-      `SELECT menu.id, foods.name, foods.price, menu.maxCount
-       FROM menu JOIN foods ON foods.id = menu.foodId
-       WHERE menu.date = $1 ORDER BY menu.id ASC`,
+    const result = await pool.query(
+      `
+      SELECT menu.id, foods.name, foods.price, menu.maxCount
+      FROM menu 
+      JOIN foods ON foods.id = menu.foodId
+      WHERE menu.date = $1
+      ORDER BY menu.id ASC
+    `,
       [date]
     );
-    res.json(r.rows);
-  } catch {
-    res.json([]);
+
+    res.json(result.rows || []);
+  } catch (err) {
+    console.error("GET /api/admin/menu error:", err);
+    res.status(500).json([]);
   }
 });
 
@@ -259,28 +280,35 @@ app.post("/api/admin/menu/add", async (req, res) => {
       [date, foodId, maxCount]
     );
 
-    const r = await pool.query(
-      `SELECT menu.id, foods.name, foods.price, menu.maxCount
-       FROM menu JOIN foods ON foods.id = menu.foodId
-       WHERE menu.date = $1 ORDER BY menu.id ASC`,
+    const items = await pool.query(
+      `
+      SELECT menu.id, foods.name, foods.price, menu.maxCount
+      FROM menu 
+      JOIN foods ON foods.id = menu.foodId
+      WHERE menu.date = $1
+      ORDER BY menu.id ASC
+    `,
       [date]
     );
 
-    res.json({ success: true, items: r.rows });
-  } catch {
-    res.json({ success: false });
+    res.json({ success: true, items: items.rows || [] });
+  } catch (err) {
+    console.error("POST /api/admin/menu/add error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
   }
 });
 
 app.post("/api/admin/menu/update", async (req, res) => {
   try {
+    const { id, maxCount } = req.body;
     await pool.query("UPDATE menu SET maxCount = $1 WHERE id = $2", [
-      req.body.maxCount,
-      req.body.id,
+      maxCount,
+      id,
     ]);
     res.json({ success: true });
-  } catch {
-    res.json({ success: false });
+  } catch (err) {
+    console.error("POST /api/admin/menu/update error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
   }
 });
 
@@ -288,119 +316,178 @@ app.post("/api/admin/menu/delete", async (req, res) => {
   try {
     await pool.query("DELETE FROM menu WHERE id = $1", [req.body.id]);
     res.json({ success: true });
-  } catch {
-    res.json({ success: false });
+  } catch (err) {
+    console.error("POST /api/admin/menu/delete error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
   }
 });
 
-// MENU PRO UŽIVATELE
+// -----------------------------------------------------
+//  MENU PRO UŽIVATELE
+// -----------------------------------------------------
 app.get("/api/menu", async (req, res) => {
   try {
     const date = req.query.date;
-    const r = await pool.query(
-      `SELECT foods.name, foods.price, menu.maxCount, menu.ordered
-       FROM menu JOIN foods ON foods.id = menu.foodId
-       WHERE menu.date = $1 ORDER BY menu.id ASC`,
+
+    const result = await pool.query(
+      `
+      SELECT foods.name, foods.price, menu.maxCount, menu.ordered
+      FROM menu 
+      JOIN foods ON foods.id = menu.foodId
+      WHERE menu.date = $1
+      ORDER BY menu.id ASC
+    `,
       [date]
     );
 
+    const rows = result.rows || [];
+
     res.json(
-      r.rows.map((x) => ({
-        name: x.name,
-        price: x.price,
-        remaining: x.maxcount - x.ordered,
-        maxCount: x.maxcount,
+      rows.map((r) => ({
+        name: r.name,
+        price: r.price,
+        maxCount: r.maxcount,
+        remaining: r.maxcount - r.ordered,
       }))
     );
-  } catch {
-    res.json([]);
+  } catch (err) {
+    console.error("GET /api/menu error:", err);
+    res.status(500).json([]);
   }
 });
 
-// OBJEDNÁVKA (původní plně funkční logika)
+// -----------------------------------------------------
+//  OBJEDNÁVKA + KONTROLA SKLADU
+// -----------------------------------------------------
 app.post("/api/order", async (req, res) => {
   const client = await pool.connect();
   try {
     const { userId, date, items } = req.body;
-    if (!Array.isArray(items) || items.length === 0)
+
+    if (!Array.isArray(items) || items.length === 0) {
       return res.json({ success: false, error: "Prázdná objednávka" });
+    }
 
     const total = items.reduce((s, i) => s + i.price, 0);
 
+    // spočítat kolik kusů od každého jídla
     const grouped = {};
-    items.forEach((i) => (grouped[i.name] = (grouped[i.name] || 0) + 1));
+    items.forEach((i) => {
+      grouped[i.name] = (grouped[i.name] || 0) + 1;
+    });
 
     await client.query("BEGIN");
 
+    // sklad
     const menuRes = await client.query(
-      `SELECT foods.name, menu.maxCount, menu.ordered
-       FROM menu JOIN foods ON foods.id = menu.foodId
-       WHERE menu.date = $1`,
+      `
+      SELECT foods.name, menu.maxCount, menu.ordered
+      FROM menu 
+      JOIN foods ON foods.id = menu.foodId
+      WHERE menu.date = $1
+    `,
       [date]
     );
+    const menuRows = menuRes.rows || [];
 
     for (const name in grouped) {
-      const row = menuRes.rows.find((r) => r.name === name);
+      const row = menuRows.find((r) => r.name === name);
       if (!row || row.ordered + grouped[name] > row.maxcount) {
         await client.query("ROLLBACK");
-        return res.json({ success: false, error: "Nedostatek skladových kusů" });
+        return res.json({
+          success: false,
+          error: "Není dostatek kusů na skladě",
+        });
       }
     }
 
-    const uRes = await client.query("SELECT credit FROM users WHERE id = $1 FOR UPDATE", [userId]);
-    const credit = uRes.rows[0].credit;
+    // kredit uživatele (lockneme řádek)
+    const userRes = await client.query(
+      "SELECT credit FROM users WHERE id = $1 FOR UPDATE",
+      [userId]
+    );
+    if (userRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.json({ success: false, error: "Uživatel neexistuje" });
+    }
+    const currentCredit = userRes.rows[0].credit;
 
-    if (credit < total) {
+    if (currentCredit < total) {
       await client.query("ROLLBACK");
       return res.json({ success: false, error: "Nedostatečný kredit" });
     }
 
-    await client.query("UPDATE users SET credit = credit - $1 WHERE id = $2", [total, userId]);
+    // odečíst kredit
+    await client.query(
+      "UPDATE users SET credit = credit - $1 WHERE id = $2",
+      [total, userId]
+    );
 
+    // aktualizovat objednané kusy v menu
     for (const name in grouped) {
+      const count = grouped[name];
+
       await client.query(
-        `UPDATE menu SET ordered = ordered + $1
-         WHERE date = $2 AND foodId = (SELECT id FROM foods WHERE name = $3)`,
-        [grouped[name], date, name]
+        `
+        UPDATE menu 
+        SET ordered = ordered + $1
+        WHERE date = $2
+          AND foodId = (SELECT id FROM foods WHERE name = $3)
+      `,
+        [count, date, name]
       );
     }
 
-    const itemNames = items.map((i) => i.name).join(", ");
+    const itemsStr = items.map((i) => i.name).join(", ");
 
     await client.query(
-      `INSERT INTO orders (userId, date, itemNames, price, status)
-       VALUES ($1, $2, $3, $4, 'ok')`,
-      [userId, date, itemNames, total]
+      `
+      INSERT INTO orders (userId, date, itemNames, price, status)
+      VALUES ($1, $2, $3, $4, $5)
+    `,
+      [userId, date, itemsStr, total, "ok"]
     );
 
     await client.query("COMMIT");
 
-    res.json({ success: true, credit: credit - total });
+    res.json({ success: true, credit: currentCredit - total });
   } catch (err) {
-    console.log(err);
+    console.error("POST /api/order error:", err);
     try {
       await client.query("ROLLBACK");
-    } catch {}
-    res.json({ success: false });
+    } catch (_) {}
+    res.status(500).json({ success: false, error: "Server error" });
   } finally {
     client.release();
   }
 });
 
-// HISTORIE
+// -----------------------------------------------------
+//  HISTORIE OBJEDNÁVEK
+// -----------------------------------------------------
 app.get("/api/orders/history", async (req, res) => {
   try {
-    const r = await pool.query(
-      `SELECT * FROM orders WHERE userId = $1 AND status='ok' ORDER BY date DESC, id DESC`,
-      [req.query.userId]
+    const userId = req.query.userId;
+    const result = await pool.query(
+      `
+      SELECT id, date, itemNames AS "itemNames", price 
+      FROM orders
+      WHERE userId = $1 AND status = 'ok'
+      ORDER BY date DESC, id DESC
+    `,
+      [userId]
     );
-    res.json(r.rows);
-  } catch {
-    res.json([]);
+
+    res.json(result.rows || []);
+  } catch (err) {
+    console.error("GET /api/orders/history error:", err);
+    res.status(500).json([]);
   }
 });
 
-// ZRUŠENÍ
+// -----------------------------------------------------
+//  ZRUŠENÍ OBJEDNÁVKY
+// -----------------------------------------------------
 app.post("/api/orders/cancel", async (req, res) => {
   const client = await pool.connect();
   try {
@@ -408,176 +495,172 @@ app.post("/api/orders/cancel", async (req, res) => {
 
     await client.query("BEGIN");
 
-    const o = await client.query("SELECT * FROM orders WHERE id = $1", [orderId]);
-    if (o.rowCount === 0) {
+    const orderRes = await client.query(
+      "SELECT * FROM orders WHERE id = $1",
+      [orderId]
+    );
+    if (orderRes.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.json({ success: false });
     }
 
-    const order = o.rows[0];
-    const today = new Date().toISOString().slice(0, 10);
+    const order = orderRes.rows[0];
 
+    const today = new Date().toISOString().slice(0, 10);
     if (order.date <= today) {
       await client.query("ROLLBACK");
-      return res.json({ success: false, error: "Zrušit lze den dopředu" });
+      return res.json({
+        success: false,
+        error: "Objednávku lze zrušit jen den dopředu!",
+      });
     }
 
-    const items = order.itemnames.split(", ").filter(Boolean);
+    const items = (order.itemnames || "").split(", ").filter(Boolean);
 
-    for (const n of items) {
+    for (const name of items) {
       await client.query(
-        `UPDATE menu SET ordered = ordered - 1
-         WHERE date = $1 AND foodId = (SELECT id FROM foods WHERE name = $2)`,
-        [order.date, n]
+        `
+        UPDATE menu 
+        SET ordered = ordered - 1
+        WHERE date = $1 
+          AND foodId = (SELECT id FROM foods WHERE name = $2)
+      `,
+        [order.date, name]
       );
     }
 
-    await client.query("UPDATE users SET credit = credit + $1 WHERE id = $2", [
-      order.price,
-      order.userid,
-    ]);
+    await client.query(
+      "UPDATE users SET credit = credit + $1 WHERE id = $2",
+      [order.price, order.userid]
+    );
 
-    await client.query("UPDATE orders SET status='cancelled' WHERE id = $1", [
+    await client.query("UPDATE orders SET status = 'cancelled' WHERE id = $1", [
       orderId,
     ]);
 
-    const r = await client.query("SELECT credit FROM users WHERE id = $1", [
-      order.userid,
-    ]);
+    const userRes = await client.query(
+      "SELECT credit FROM users WHERE id = $1",
+      [order.userid]
+    );
+    const credit = userRes.rowCount ? userRes.rows[0].credit : undefined;
 
     await client.query("COMMIT");
 
-    res.json({ success: true, credit: r.rows[0].credit });
+    res.json({ success: true, credit });
   } catch (err) {
-    console.log(err);
-    await client.query("ROLLBACK");
-    res.json({ success: false });
+    console.error("POST /api/orders/cancel error:", err);
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+    res.status(500).json({ success: false, error: "Server error" });
   } finally {
     client.release();
   }
 });
 
 // -----------------------------------------------------
-//  ★ NOVÝ TOPUP S ADMIN POTVRZENÍM ★
+//  QR DOBÍJENÍ
 // -----------------------------------------------------
-
-// Uživatel vytvoří požadavek
 app.post("/api/topup", async (req, res) => {
   try {
     const { userId, amount } = req.body;
 
-    const r = await pool.query(
-      "INSERT INTO topups (userId, amount, done) VALUES ($1, $2, 0) RETURNING id",
+    const result = await pool.query(
+      `
+      INSERT INTO topups (userId, amount, done)
+      VALUES ($1, $2, 0)
+      RETURNING id
+    `,
       [userId, amount]
     );
 
-    const id = r.rows[0].id;
+    const paymentId = result.rows[0].id;
 
     res.json({
       success: true,
-      paymentId: id,
-      qr: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${id}`,
+      paymentId,
+      qr: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${paymentId}`,
     });
   } catch (err) {
-    res.json({ success: false });
+    console.error("POST /api/topup error:", err);
+    res.status(500).json({ success: false, error: "Server error" });
   }
 });
 
-// Stav — už jen kontrola
 app.get("/api/topup/status", async (req, res) => {
-  try {
-    const id = req.query.id;
-    const r = await pool.query("SELECT * FROM topups WHERE id = $1", [id]);
-
-    if (r.rowCount === 0) return res.json({ done: false, credit: 0 });
-
-    const t = r.rows[0];
-    const u = await pool.query("SELECT credit FROM users WHERE id = $1", [
-      t.userid,
-    ]);
-
-    res.json({ done: t.done === 1, credit: u.rows[0].credit });
-  } catch (err) {
-    res.json({ done: false, credit: 0 });
-  }
-});
-
-// Admin: seznam čekajících
-app.get("/api/admin/topups", async (req, res) => {
-  const r = await pool.query(
-    `SELECT topups.id, topups.amount, users.identifier
-     FROM topups JOIN users ON users.id = topups.userId
-     WHERE done = 0 ORDER BY id ASC`
-  );
-  res.json(r.rows);
-});
-
-// Admin: schválení dobíjení
-app.post("/api/admin/topups/approve", async (req, res) => {
   const client = await pool.connect();
   try {
-    const { id } = req.body;
+    const id = req.query.id;
 
     await client.query("BEGIN");
 
-    const t = await client.query("SELECT * FROM topups WHERE id = $1 FOR UPDATE", [id]);
-    if (t.rowCount === 0) {
+    const topRes = await client.query("SELECT * FROM topups WHERE id = $1", [
+      id,
+    ]);
+    if (topRes.rowCount === 0) {
       await client.query("ROLLBACK");
-      return res.json({ success: false });
+      return res.json({ done: false, credit: 0 });
     }
 
-    const topup = t.rows[0];
-    if (topup.done === 1) {
-      await client.query("ROLLBACK");
-      return res.json({ success: false, error: "Už schváleno" });
+    const topup = topRes.rows[0];
+
+    if (!topup.done) {
+      await client.query("UPDATE topups SET done = 1 WHERE id = $1", [id]);
+      await client.query(
+        "UPDATE users SET credit = credit + $1 WHERE id = $2",
+        [topup.amount, topup.userid]
+      );
     }
 
-    await client.query("UPDATE users SET credit = credit + $1 WHERE id = $2", [
-      topup.amount,
-      topup.userid,
-    ]);
-
-    await client.query("UPDATE topups SET done = 1 WHERE id = $1", [id]);
-
-    const u = await client.query("SELECT credit FROM users WHERE id = $1", [
-      topup.userid,
-    ]);
+    const userRes = await client.query(
+      "SELECT credit FROM users WHERE id = $1",
+      [topup.userid]
+    );
+    const credit = userRes.rowCount ? userRes.rows[0].credit : 0;
 
     await client.query("COMMIT");
 
-    res.json({ success: true, credit: u.rows[0].credit });
+    res.json({ done: true, credit });
   } catch (err) {
-    console.log(err);
-    await client.query("ROLLBACK");
-    res.json({ success: false });
+    console.error("GET /api/topup/status error:", err);
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+    res.status(500).json({ done: false, credit: 0 });
   } finally {
     client.release();
   }
 });
 
 // -----------------------------------------------------
-//  STATISTIKY – TOP FOODS + NOVĚ TOP USERS
+//  STATISTIKY – POSLEDNÍCH 30 DNÍ
 // -----------------------------------------------------
 app.get("/api/admin/stats/month", async (req, res) => {
   try {
     const since = new Date();
     since.setDate(since.getDate() - 30);
-    const limit = since.toISOString().slice(0, 10);
+    const dateStr = since.toISOString().slice(0, 10);
 
-    const orders = await pool.query(
-      "SELECT itemNames, price FROM orders WHERE date >= $1 AND status='ok'",
-      [limit]
+    const result = await pool.query(
+      `
+      SELECT itemNames AS "itemNames", price 
+      FROM orders 
+      WHERE date >= $1 AND status = 'ok'
+    `,
+      [dateStr]
     );
 
     let total = 0;
     const foods = {};
 
-    orders.rows.forEach((o) => {
+    result.rows.forEach((o) => {
       total += o.price;
-      o.itemnames?.split(", ").forEach((n) => {
-        if (!n) return;
-        foods[n] = (foods[n] || 0) + 1;
-      });
+      (o.itemNames || "")
+        .split(", ")
+        .filter(Boolean)
+        .forEach((n) => {
+          foods[n] = (foods[n] || 0) + 1;
+        });
     });
 
     const topFoods = Object.entries(foods)
@@ -585,38 +668,57 @@ app.get("/api/admin/stats/month", async (req, res) => {
       .slice(0, 5);
 
     res.json({ total, topFoods });
-  } catch {
-    res.json({ total: 0, topFoods: [] });
-  }
-});
-
-// TOP USERS
-app.get("/api/admin/stats/users", async (req, res) => {
-  try {
-    const since = new Date();
-    since.setDate(since.getDate() - 30);
-    const limit = since.toISOString().slice(0, 10);
-
-    const r = await pool.query(`
-      SELECT users.identifier, SUM(orders.price) AS spent
-      FROM orders
-      JOIN users ON users.id = orders.userid
-      WHERE orders.date >= $1 AND orders.status='ok'
-      GROUP BY users.identifier
-      ORDER BY spent DESC
-      LIMIT 10
-    `, [limit]);
-
-    res.json(r.rows);
-  } catch {
-    res.json([]);
+  } catch (err) {
+    console.error("GET /api/admin/stats/month error:", err);
+    res.status(500).json({ total: 0, topFoods: [] });
   }
 });
 
 // -----------------------------------------------------
-//  START SERVERU
+//  STATISTIKY – SOUČET OBJEDNÁVEK NA DEN
+// -----------------------------------------------------
+app.get("/api/admin/stats/day", async (req, res) => {
+  try {
+    const date = req.query.date;
+
+    const result = await pool.query(
+      `
+      SELECT itemNames AS "itemNames"
+      FROM orders 
+      WHERE date = $1 AND status = 'ok'
+    `,
+      [date]
+    );
+
+    const sum = {};
+    result.rows.forEach((o) => {
+      (o.itemNames || "")
+        .split(", ")
+        .filter(Boolean)
+        .forEach((n) => {
+          sum[n] = (sum[n] || 0) + 1;
+        });
+    });
+
+    res.json(sum);
+  } catch (err) {
+    console.error("GET /api/admin/stats/day error:", err);
+    res.status(500).json({});
+  }
+});
+
+// -----------------------------------------------------
+//  START SERVERU – nejdřív init DB, pak posloucháme
 // -----------------------------------------------------
 const PORT = process.env.PORT || 3000;
-initDb().then(() => {
-  app.listen(PORT, () => console.log("Server běží na portu", PORT));
-});
+
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log("✅ Backend běží na portu " + PORT);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ Chyba při inicializaci databáze:", err);
+    process.exit(1);
+  });
