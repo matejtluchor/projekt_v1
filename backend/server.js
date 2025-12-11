@@ -9,6 +9,15 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "../frontend")));
 
 // -----------------------------------------------------
+//  LOGOVÁNÍ REQUESTŮ (pro monitoring na Renderu)
+// -----------------------------------------------------
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
+
+// -----------------------------------------------------
 //  POSTGRESQL PŘIPOJENÍ
 // -----------------------------------------------------
 
