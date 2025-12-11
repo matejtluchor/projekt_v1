@@ -13,33 +13,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set environment variables
+      - name: Install PostgreSQL 18 tools (manual)
         run: |
-          echo "DB_URL=${{ secrets.DATABASE_URL }}" >> $GITHUB_ENV
-          # Rozdělení URL (postgres://user:pass@host:port/dbname)
-          echo "DB_USER=$(echo $DB_URL | sed -E 's|postgres://([^:]+):.*|\1|')" >> $GITHUB_ENV
-          echo "DB_PASSWORD=$(echo $DB_URL | sed -E 's|postgres://[^:]+:([^@]+).*|\1|')" >> $GITHUB_ENV
-          echo "DB_HOST=$(echo $DB_URL | sed -E 's|postgres://[^@]+@([^:]+):.*|\1|')" >> $GITHUB_ENV
-          echo "DB_PORT=$(echo $DB_URL | sed -E 's|.*:([0-9]+)/.*|\1|')" >> $GITHUB_ENV
-          echo "DB_NAME=$(echo $DB_URL | sed -E 's|.*/([^/?]+).*|\1|')" >> $GITHUB_ENV
+          wget https://ftp.postgresql.org/pub/source/v18.1/postgresql-18.1.tar.gz
+          tar -xzf postgresql-18.1.tar.gz
+          cd postgresql-18.1
+          ./configure
+          make -j4
+          sudo make install
+          pg_dump --version
 
-      - name: Create backup folder
-        run: mkdir -p backups
-
-      - name: Run pg_dump using Docker (Postgres 18)
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-          BACKUP_FILE="backups/backup-$TIMESTAMP.sql"
-
-          docker run --rm \
-            -e PGPASSWORD=$DB_PASSWORD \
-            postgres:18 \
-            pg_dump -h $DB_HOST -U $DB_USER -p $DB_PORT -d $DB_NAME > "$BACKUP_FILE"
-
-          echo "Backup created at $BACKUP_FILE"
+          mkdir -p backups
+          BACKUP_FILE="backups/backup-$(date +'%Y-%m-%d_%H-%M').sql"
+          PGPASSWORD=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/') \
+            pg_dump "$DATABASE_URL" > "$BACKUP_FILE"
+          echo "Backup created: $BACKUP_FILE"
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@v4
         with:
-          name: db-backup
-          path: backups
+          name: database-backup
+          path: backups/
