@@ -15,10 +15,14 @@ jobs:
 
       - name: Install PostgreSQL 18 client
         run: |
-          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | sudo tee /etc/apt/keyrings/postgresql.gpg > /dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/postgresql.list
           sudo apt-get update
           sudo apt-get install -y postgresql-client-18
+
+      - name: Check pg_dump version
+        run: pg_dump --version
 
       - name: Run pg_dump backup
         env:
@@ -26,7 +30,7 @@ jobs:
         run: |
           mkdir -p backups
           BACKUP_FILE="backups/backup-$(date +'%Y-%m-%d_%H-%M').sql"
-          PGPASSWORD=$(echo $DATABASE_URL | sed 's/.*:.*:\(.*\)@.*/\1/') pg_dump "$DATABASE_URL" > $BACKUP_FILE
+          PGPASSWORD=$(echo $DATABASE_URL | sed 's/.*:\/\/.*:\(.*\)@.*/\1/') pg_dump "$DATABASE_URL" > $BACKUP_FILE
           echo "Backup created at $BACKUP_FILE"
 
       - name: Upload backup artifact
