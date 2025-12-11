@@ -1,39 +1,36 @@
 name: Daily Database Backup
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *"   # každý den v 02:00
-  workflow_dispatch:       # umožní ruční spuštění
+    - cron: "0 2 * * *"
 
 jobs:
   backup:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Install PostgreSQL client
-      run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL 18 client
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
 
-    - name: Run pg_dump backup
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      run: |
-        mkdir -p backups
-        FILE="backups/backup-$(date +'%Y-%m-%d_%H-%M').sql"
-        pg_dump "$DATABASE_URL" > "$FILE"
-        echo "Backup created: $FILE"
+      - name: Run pg_dump backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          mkdir -p backups
+          BACKUP_FILE="backups/backup-$(date +'%Y-%m-%d_%H-%M').sql"
+          PGPASSWORD=$(echo $DATABASE_URL | sed 's/.*:.*:\(.*\)@.*/\1/') pg_dump "$DATABASE_URL" > $BACKUP_FILE
+          echo "Backup created at $BACKUP_FILE"
 
-    - name: Commit backup
-      run: |
-        git config --global user.name "github-backup-bot"
-        git config --global user.email "backup@example.com"
-        git add backups/*.sql || true
-        git commit -m "Automated backup: $(date)" || true
-
-    - name: Push backup
-      uses: ad-m/github-push-action@v0.6.0
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        branch: main
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup
+          path: backups/
