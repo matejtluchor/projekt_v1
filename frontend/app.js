@@ -406,46 +406,48 @@ async function showMyOrders() {
 
   const orders = await api("/api/orders/history");
 
-  if (!orders.length) {
+  // ✅ bezpečná kontrola
+  if (!Array.isArray(orders) || orders.length === 0) {
     $("myOrdersList").innerHTML = "<p>Nemáš žádné objednávky.</p>";
     return;
   }
 
-$("myOrdersList").innerHTML = orders.map(o => {
-  // sjednocení názvu pole
-  const namesStr = o.itemNames || "";
-  const grouped = {};
+  $("myOrdersList").innerHTML = orders.map(o => {
+    const namesStr = o.itemNames || "";
+    const grouped = {};
 
-  namesStr.split(", ").forEach(n => {
-    if (!n) return;
-    grouped[n] = (grouped[n] || 0) + 1;
-  });
+    namesStr.split(", ").forEach(n => {
+      if (!n) return;
+      grouped[n] = (grouped[n] || 0) + 1;
+    });
 
-  const itemsHtml = Object.entries(grouped)
-    .map(([name, count]) => `${count}× ${name}`)
-    .join("<br>");
+    const itemsHtml = Object.entries(grouped)
+      .map(([name, count]) => `${count}× ${name}`)
+      .join("<br>");
 
-  return `
-    <div class="card">
-      <strong>${o.date}</strong><br>
-      ${itemsHtml}<br>
-      <b>${fmt(o.price)}</b><br>
-      <button class="btn btn-danger btn-sm" onclick="cancelOrder(${o.id})">
-        Zrušit
-      </button>
-    </div>
-  `;
-}).join("");
-
+    return `
+      <div class="card">
+        <strong>${o.date}</strong><br>
+        ${itemsHtml}<br>
+        <b>${fmt(o.price)}</b><br>
+        <button class="btn btn-danger btn-sm" onclick="cancelOrder(${o.id})">
+          Zrušit
+        </button>
+      </div>
+    `;
+  }).join("");
 }
 
+// ---------- ZRUŠENÍ OBJEDNÁVKY ----------
 async function cancelOrder(orderId) {
   const d = await api("/api/orders/cancel", {
     method: "POST",
     body: JSON.stringify({ orderId }),
   });
 
-  if (!d.success) return showModal("Chyba", d.error);
+  if (!d.success) {
+    return showModal("Chyba", d.error || "Zrušení se nezdařilo");
+  }
 
   $("credit").textContent = fmt(d.credit);
   showModal("Hotovo", "Objednávka byla zrušena.");
