@@ -474,6 +474,21 @@ async function loadDailyStats() {
   $("dailyStatsOutput").innerHTML = html;
 }
 
+// HISTORIE OBJEDNÁVEK – DEBUG VERZE
+app.get("/api/orders/history", auth, async (req, res) => {
+  const r = await pool.query(
+    `
+    SELECT id, date, itemNames, price, status
+    FROM orders
+    WHERE userId=$1
+    ORDER BY date DESC, id DESC
+    `,
+    [req.user.id]
+  );
+
+  res.json(r.rows || []);
+});
+
 // ---------- EVENTS ----------
 $("loginBtn").onclick = login;
 $("registerBtn").onclick = registerUser;
