@@ -52,10 +52,15 @@ function showModal(title, text) {
 // -----------------------------------------------------
 //  PO LOGINU / REGISTRACI
 // -----------------------------------------------------
+
 function afterAuth(identifier, data) {
+  // uložíme JWT token do proměnné
   authToken = data.token;
+
+  // role
   isAdmin = data.role === "admin" || data.role === "manager";
 
+  // uložíme vše do localStorage (JEDNO místo pravdy)
   localStorage.setItem(
     "user",
     JSON.stringify({
@@ -66,12 +71,60 @@ function afterAuth(identifier, data) {
     })
   );
 
+  // UI – horní lišta
   $("loggedUser").textContent = "Uživatel: " + identifier;
+  $("logoutBtn").classList.remove("hidden");
+
+  // skrytí loginu, zobrazení uživatele
+  $("login").classList.add("hidden");
+  $("user").classList.remove("hidden");
+  $("credit").textContent = fmt(data.credit);
+
+  // menu + košík
+  $("menu").classList.remove("hidden");
+  $("order").classList.remove("hidden");
+
+  // inicializace dat
+  renderCart();
+  populateDates();
+  loadMenu();
+
+  // ADMIN sekce
+  if (isAdmin) {
+    $("admin").classList.remove("hidden");
+
+    $("adminDate").value = new Date().toISOString().slice(0, 10);
+    $("statsDate").value = new Date().toISOString().slice(0, 10);
+
+    $("adminDate").onchange = loadAdminMenu;
+    $("statsDate").onchange = loadDailyStats;
+
+    loadFoods();
+    loadAdminMenu();
+    loadAdminStats();
+    loadDailyStats();
+  }
+}
+
+
+// -----------------------------------------------------
+//  AUTO LOGIN
+// -----------------------------------------------------
+document.addEventListener("DOMContentLoaded", () => {
+  const saved = localStorage.getItem("user");
+  if (!saved) return;
+
+  const u = JSON.parse(saved);
+
+  authToken = u.token;
+  isAdmin = u.role === "admin" || u.role === "manager";
+
+  $("loggedUser").textContent = "Uživatel: " + u.name;
   $("logoutBtn").classList.remove("hidden");
 
   $("login").classList.add("hidden");
   $("user").classList.remove("hidden");
-  $("credit").textContent = fmt(data.credit);
+  $("credit").textContent = fmt(u.credit);
 
   $("menu").classList.remove("hidden");
   $("order").classList.remove("hidden");
@@ -94,25 +147,8 @@ function afterAuth(identifier, data) {
     loadAdminStats();
     loadDailyStats();
   }
-}
-
-// -----------------------------------------------------
-//  AUTO LOGIN
-// -----------------------------------------------------
-document.addEventListener("DOMContentLoaded", () => {
-  const saved = localStorage.getItem("user");
-  if (!saved) return;
-
-  const u = JSON.parse(saved);
-  authToken = u.token;
-  isAdmin = u.role === "admin" || u.role === "manager";
-
-  afterAuth(u.name, {
-    token: u.token,
-    role: u.role,
-    credit: u.credit,
-  });
 });
+
 
 // -----------------------------------------------------
 //  LOGIN
@@ -159,6 +195,7 @@ async function registerUser() {
 // -----------------------------------------------------
 $("logoutBtn").onclick = () => {
   localStorage.removeItem("user");
+  authToken = null;
   location.reload();
 };
 
@@ -377,9 +414,11 @@ async function showMyOrders() {
   $("myOrdersList").innerHTML = orders.map(o => `
     <div class="card">
       <strong>${o.date}</strong><br>
-      ${o.itemnames}<br>
+      ${o.itemNames}<br>
       <b>${fmt(o.price)}</b><br>
-      <button class="btn btn-danger btn-sm" onclick="cancelOrder(${o.id})">Zrušit</button>
+      <button class="btn btn-danger btn-sm" onclick="cancelOrder(${o.id})">
+        Zrušit
+      </button>
     </div>
   `).join("");
 }
