@@ -486,5 +486,11 @@ $("topupBtn").onclick = () => {
 };
 
 $("myOrdersBtn2").onclick = () => {
-  $("myOrders").classList.toggle("hidden");
+  const sec = $("myOrders");
+
+  if (sec.classList.contains("hidden")) {
+    showMyOrders();   // 🔥 TADY SE TO KONEČNĚ NAČTE
+  } else {
+    sec.classList.add("hidden");
+  }
 };
