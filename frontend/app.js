@@ -411,16 +411,32 @@ async function showMyOrders() {
     return;
   }
 
-  $("myOrdersList").innerHTML = orders.map(o => `
+$("myOrdersList").innerHTML = orders.map(o => {
+  // sjednocení názvu pole
+  const namesStr = o.itemNames || "";
+  const grouped = {};
+
+  namesStr.split(", ").forEach(n => {
+    if (!n) return;
+    grouped[n] = (grouped[n] || 0) + 1;
+  });
+
+  const itemsHtml = Object.entries(grouped)
+    .map(([name, count]) => `${count}× ${name}`)
+    .join("<br>");
+
+  return `
     <div class="card">
       <strong>${o.date}</strong><br>
-      ${o.itemNames}<br>
+      ${itemsHtml}<br>
       <b>${fmt(o.price)}</b><br>
       <button class="btn btn-danger btn-sm" onclick="cancelOrder(${o.id})">
         Zrušit
       </button>
     </div>
-  `).join("");
+  `;
+}).join("");
+
 }
 
 async function cancelOrder(orderId) {
