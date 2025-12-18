@@ -406,14 +406,14 @@ async function showMyOrders() {
 
   const orders = await api("/api/orders/history");
 
-  // ✅ bezpečná kontrola
   if (!Array.isArray(orders) || orders.length === 0) {
     $("myOrdersList").innerHTML = "<p>Nemáš žádné objednávky.</p>";
     return;
   }
 
   $("myOrdersList").innerHTML = orders.map(o => {
-    const namesStr = o.itemNames || "";
+    // 🔴 FIX: backend posílá itemnames (malé n)
+    const namesStr = o.itemNames || o.itemnames || "";
     const grouped = {};
 
     namesStr.split(", ").forEach(n => {
@@ -473,21 +473,6 @@ async function loadDailyStats() {
   for (let k in data) html += `${k} – ${data[k]}×<br>`;
   $("dailyStatsOutput").innerHTML = html;
 }
-
-// HISTORIE OBJEDNÁVEK – DEBUG VERZE
-app.get("/api/orders/history", auth, async (req, res) => {
-  const r = await pool.query(
-    `
-    SELECT id, date, itemNames, price, status
-    FROM orders
-    WHERE userId=$1
-    ORDER BY date DESC, id DESC
-    `,
-    [req.user.id]
-  );
-
-  res.json(r.rows || []);
-});
 
 // ---------- EVENTS ----------
 $("loginBtn").onclick = login;
