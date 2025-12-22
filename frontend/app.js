@@ -50,6 +50,37 @@ function showModal(title, text) {
 }
 
 // -----------------------------------------------------
+//  CONFIRM MODAL (ANO / NE)
+// -----------------------------------------------------
+function showConfirmModal(title, text, onConfirm) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+
+  const modal = document.createElement("div");
+  modal.className = "modal";
+
+  modal.innerHTML = `
+    <h3>${title}</h3>
+    <p>${text}</p>
+    <button class="btn btn-success">Ano, ukázat</button>
+    <button class="btn btn-outline">Zrušit</button>
+  `;
+
+  const [yesBtn, noBtn] = modal.querySelectorAll("button");
+
+  yesBtn.onclick = () => {
+    overlay.remove();
+    onConfirm();
+  };
+
+  noBtn.onclick = () => overlay.remove();
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+
+// -----------------------------------------------------
 //  PO LOGINU / REGISTRACI
 // -----------------------------------------------------
 
@@ -425,18 +456,60 @@ async function showMyOrders() {
       .map(([name, count]) => `${count}× ${name}`)
       .join("<br>");
 
+    const isShown = o.shown === true;
+
     return `
-      <div class="card">
+      <div class="card ${isShown ? "order-disabled" : ""}">
         <strong>${o.date}</strong><br>
         ${itemsHtml}<br>
         <b>${fmt(o.price)}</b><br>
-        <button class="btn btn-danger btn-sm" onclick="cancelOrder(${o.id})">
+
+        <button
+          class="btn btn-danger btn-sm"
+          onclick="cancelOrder(${o.id})"
+          ${isShown ? "disabled" : ""}
+        >
           Zrušit
         </button>
+
+        <button
+          class="btn btn-outline btn-sm"
+          onclick="confirmShowOrder(${o.id})"
+          ${isShown ? "disabled" : ""}
+        >
+          Ukázat kuchyni
+        </button>
+
+        ${
+          isShown
+            ? "<div style='margin-top:6px;color:#6b7280;font-size:13px'>✔ Objednávka byla ukázána kuchyni</div>"
+            : ""
+        }
       </div>
     `;
   }).join("");
 }
+
+// ---------- CONFIRM SHOW ORDER ----------
+function confirmShowOrder(orderId) {
+  showConfirmModal(
+    "Ukázat objednávku kuchyni?",
+    "Po potvrzení už nebude možné objednávku zrušit.",
+    async () => {
+      const d = await api(`/api/orders/${orderId}/show`, {
+        method: "POST",
+      });
+
+      if (!d.success) {
+        return showModal("Chyba", d.error || "Nepodařilo se ukázat objednávku");
+      }
+
+      showModal("Hotovo", "Objednávka byla ukázána kuchyni.");
+      showMyOrders(); // refresh UI
+    }
+  );
+}
+
 
 // ---------- ZRUŠENÍ OBJEDNÁVKY ----------
 async function cancelOrder(orderId) {
@@ -454,6 +527,29 @@ async function cancelOrder(orderId) {
   showMyOrders();
   loadMenu();
 }
+
+// -----------------------------------------------------
+//  UKÁZAT OBJEDNÁVKU KUCHYNI
+// -----------------------------------------------------
+function showOrderToKitchen(orderId) {
+  showConfirmModal(
+    "Ukázat objednávku",
+    "Opravdu chceš ukázat objednávku kuchyni? Po tomto kroku už ji nebude možné zrušit.",
+    async () => {
+      const d = await api(`/api/orders/${orderId}/show`, {
+        method: "POST",
+      });
+
+      if (!d.success) {
+        return showModal("Chyba", d.error || "Operace se nezdařila");
+      }
+
+      showModal("Hotovo", "Objednávka byla ukázána kuchyni.");
+      showMyOrders();
+    }
+  );
+}
+
 
 // ---------- ADMIN STATISTIKY ----------
 async function loadAdminStats() {

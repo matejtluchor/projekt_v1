@@ -88,6 +88,26 @@ async function initDb() {
 }
 
 // -----------------------------------------------------
+//  CLEANUP – mazání starých objednávek
+// -----------------------------------------------------
+async function cleanupOldOrders() {
+  if (!pool) return;
+
+  try {
+    const r = await pool.query(`
+      DELETE FROM orders
+      WHERE date < (CURRENT_DATE - INTERVAL '14 days')
+    `);
+
+    if (r.rowCount > 0) {
+      console.log(`🧹 Cleanup: smazáno ${r.rowCount} starých objednávek`);
+    }
+  } catch (err) {
+    console.error("❌ Cleanup error:", err);
+  }
+}
+
+// -----------------------------------------------------
 // FOODS (ADMIN)
 // -----------------------------------------------------
 app.get("/api/foods", auth, adminOnly, async (req, res) => {
@@ -114,8 +134,16 @@ const PORT = process.env.PORT || 3000;
 
 (async () => {
   await initDb();
+  await cleanupOldOrders(); // 👈 tady
 
   app.listen(PORT, () => {
     console.log("Server běží na portu " + PORT);
   });
 })();
+
+// -----------------------------------------------------
+//  AUTOMATICKÝ CLEANUP – 1× za 24 hodin
+// -----------------------------------------------------
+setInterval(() => {
+  cleanupOldOrders();
+}, 24 * 60 * 60 * 1000);

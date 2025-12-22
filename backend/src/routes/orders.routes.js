@@ -36,7 +36,7 @@ router.post("/order", auth, async (req, res) => {
       FROM menu
       JOIN foods ON foods.id = menu.foodId
       WHERE menu.date = $1
-    `,
+      `,
       [date]
     );
 
@@ -70,7 +70,7 @@ router.post("/order", auth, async (req, res) => {
         SET ordered = ordered + $1
         WHERE date = $2
         AND foodId = (SELECT id FROM foods WHERE name=$3)
-      `,
+        `,
         [grouped[name], date, name]
       );
     }
@@ -79,9 +79,9 @@ router.post("/order", auth, async (req, res) => {
 
     await client.query(
       `
-      INSERT INTO orders (userId,date,itemNames,price,status)
-      VALUES ($1,$2,$3,$4,'ok')
-    `,
+      INSERT INTO orders (userid, date, itemnames, price, status)
+      VALUES ($1, $2, $3, $4, 'ok')
+      `,
       [userId, date, names, total]
     );
 
@@ -90,6 +90,7 @@ router.post("/order", auth, async (req, res) => {
     res.json({ success: true, credit: u.rows[0].credit - total });
   } catch (err) {
     await client.query("ROLLBACK");
+    console.error(err);
     res.status(500).json({ success: false, error: "Server error" });
   } finally {
     client.release();
@@ -106,11 +107,11 @@ router.get("/orders/history", auth, async (req, res) => {
 
   const r = await pool.query(
     `
-    SELECT id, date, itemNames, price
+    SELECT id, date, itemnames, price, status, shown
     FROM orders
-    WHERE userId=$1 AND status='ok'
+    WHERE userid=$1
     ORDER BY date DESC, id DESC
-  `,
+    `,
     [req.user.id]
   );
 
@@ -132,7 +133,7 @@ router.post("/orders/cancel", auth, async (req, res) => {
     await client.query("BEGIN");
 
     const r = await client.query(
-      "SELECT * FROM orders WHERE id=$1",
+      "SELECT * FROM orders WHERE id=$1 FOR UPDATE",
       [orderId]
     );
 
@@ -144,6 +145,16 @@ router.post("/orders/cancel", auth, async (req, res) => {
     const order = r.rows[0];
     const today = new Date().toISOString().slice(0, 10);
 
+    // ❌ nelze zrušit ukázanou objednávku
+    if (order.shown) {
+      await client.query("ROLLBACK");
+      return res.json({
+        success: false,
+        error: "Objednávku už nelze zrušit – byla ukázána",
+      });
+    }
+
+    // ❌ nelze zrušit v den objednávky
     if (order.date <= today) {
       await client.query("ROLLBACK");
       return res.json({
@@ -161,7 +172,7 @@ router.post("/orders/cancel", auth, async (req, res) => {
         SET ordered = ordered - 1
         WHERE date=$1
         AND foodId=(SELECT id FROM foods WHERE name=$2)
-      `,
+        `,
         [order.date, name]
       );
     }
@@ -185,9 +196,68 @@ router.post("/orders/cancel", auth, async (req, res) => {
     res.json({ success: true, credit: u.rows[0].credit });
   } catch (err) {
     await client.query("ROLLBACK");
+    console.error(err);
     res.status(500).json({ success: false });
   } finally {
     client.release();
+  }
+});
+
+// -----------------------------------------------------
+// SHOW ORDER (potvrzení kuchyni)
+// -----------------------------------------------------
+router.post("/orders/:id/show", auth, async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({ success: false, error: "DB nedostupná" });
+  }
+
+  try {
+    const orderId = req.params.id;
+    const userId = req.user.id;
+
+    const r = await pool.query(
+      `
+      SELECT id, shown
+      FROM orders
+      WHERE id = $1 AND userid = $2
+      `,
+      [orderId, userId]
+    );
+
+    if (!r.rowCount) {
+      return res.status(404).json({
+        success: false,
+        error: "Objednávka nenalezena",
+      });
+    }
+
+    if (r.rows[0].shown) {
+      return res.json({
+        success: false,
+        error: "Objednávka už byla ukázána",
+      });
+    }
+
+    await pool.query(
+      `
+      UPDATE orders
+      SET shown = true,
+          shown_at = NOW()
+      WHERE id = $1
+      `,
+      [orderId]
+    );
+
+    res.json({
+      success: true,
+      message: "Objednávka byla úspěšně ukázána",
+    });
+  } catch (err) {
+    console.error("SHOW ORDER error:", err);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
   }
 });
 

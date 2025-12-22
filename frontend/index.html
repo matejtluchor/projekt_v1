@@ -22,19 +22,18 @@
 <main class="container">
 
   <!-- LOGIN -->
-<section id="login" class="card auth-card">
-  <h2>Přihlášení / Registrace</h2>
+  <section id="login" class="card auth-card">
+    <h2>Přihlášení / Registrace</h2>
 
-  <input id="loginInput" placeholder="Uživatelské jméno">
+    <input id="loginInput" placeholder="Uživatelské jméno">
 
-  <!-- Heslo je teď POVINNÉ pro všechny -->
-  <input id="adminPassword" type="password" placeholder="Heslo">
+    <input id="adminPassword" type="password" placeholder="Heslo">
 
-  <div class="login-actions">
-    <button id="loginBtn" class="btn btn-primary">Přihlásit</button>
-    <button id="registerBtn" class="btn btn-outline">Registrovat</button>
-  </div>
-</section>
+    <div class="login-actions">
+      <button id="loginBtn" class="btn btn-primary">Přihlásit</button>
+      <button id="registerBtn" class="btn btn-outline">Registrovat</button>
+    </div>
+  </section>
 
   <!-- USER -->
   <section id="user" class="card hidden">
@@ -89,7 +88,6 @@
     <h3>Admin / Manager – přehled & tvorba menu</h3>
 
     <h4 class="admin-subtitle">📊 STATISTIKY</h4>
-
     <div class="card" id="adminStats"></div>
 
     <div class="card">
@@ -119,7 +117,28 @@
 
 </main>
 
+<!-- 🔔 TOASTY -->
 <div id="toastRoot" class="toast-root"></div>
+
+<!-- ✅ MODAL: Ukázat objednávku -->
+<div id="showModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Ukázat objednávku</h3>
+    <p>
+      Opravdu chcete ukázat objednávku kuchyni?<br>
+      <strong>Po ukázání ji už nebude možné zrušit.</strong>
+    </p>
+
+    <div class="modal-actions">
+      <button id="confirmShowBtn" class="btn btn-primary">
+        Ano, ukázat
+      </button>
+      <button id="cancelShowBtn" class="btn btn-outline">
+        Zrušit
+      </button>
+    </div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
