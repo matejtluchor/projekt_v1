@@ -491,24 +491,40 @@ async function showMyOrders() {
 }
 
 // ---------- CONFIRM SHOW ORDER ----------
-function confirmShowOrder(orderId) {
-  showConfirmModal(
-    "Ukázat objednávku kuchyni?",
-    "Po potvrzení už nebude možné objednávku zrušit.",
-    async () => {
-      const d = await api(`/api/orders/${orderId}/show`, {
-        method: "POST",
-      });
+// -----------------------------------------------------
+//  CONFIRM MODAL (ANO / NE)
+// -----------------------------------------------------
+function showConfirmModal(title, text, onConfirm) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
 
-      if (!d.success) {
-        return showModal("Chyba", d.error || "Nepodařilo se ukázat objednávku");
-      }
+  const modal = document.createElement("div");
+  modal.className = "modal";
 
-      showModal("Hotovo", "Objednávka byla ukázána kuchyni.");
-      showMyOrders(); // refresh UI
-    }
-  );
+  modal.innerHTML = `
+    <h3>${title}</h3>
+    <p>${text}</p>
+
+    <div class="modal-actions">
+      <button class="btn btn-success">Ano, ukázat</button>
+      <button class="btn btn-outline">Zrušit</button>
+    </div>
+  `;
+
+  const yesBtn = modal.querySelector(".btn-success");
+  const noBtn = modal.querySelector(".btn-outline");
+
+  yesBtn.onclick = () => {
+    overlay.remove();
+    onConfirm();
+  };
+
+  noBtn.onclick = () => overlay.remove();
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
 }
+
 
 
 // ---------- ZRUŠENÍ OBJEDNÁVKY ----------

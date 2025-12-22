@@ -26,6 +26,8 @@ body {
   padding: 20px;
 }
 
+/* ================= TOPBAR ================= */
+
 .topbar {
   background: linear-gradient(90deg, var(--accent), #081426);
   border-bottom: 3px solid var(--accent-2);
@@ -50,7 +52,8 @@ body {
   color: var(--accent-2);
 }
 
-/* KARTY */
+/* ================= KARTY ================= */
+
 .card {
   background: var(--card);
   border-radius: var(--radius);
@@ -58,13 +61,12 @@ body {
   padding: 20px;
   margin: 18px 0;
   color: #0f172a;
-  overflow: hidden;
 }
 
-/* INPUTY */
+/* ================= INPUTY ================= */
+
 input, select {
   width: 100%;
-  max-width: 100%;
   box-sizing: border-box;
   padding: 10px;
   border-radius: var(--radius);
@@ -73,7 +75,8 @@ input, select {
   background: #f8fafc;
 }
 
-/* BUTTONY */
+/* ================= BUTTONY ================= */
+
 .btn {
   padding: 10px 16px;
   border-radius: var(--radius);
@@ -111,7 +114,13 @@ input, select {
   color: white;
 }
 
-/* USER */
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* ================= USER ================= */
+
 .user-row {
   display: flex;
   justify-content: space-between;
@@ -123,7 +132,8 @@ input, select {
   gap: 10px;
 }
 
-/* MENU HLAVIČKA + DATUM */
+/* ================= MENU ================= */
+
 .menu-header {
   display: flex;
   justify-content: space-between;
@@ -138,23 +148,62 @@ input, select {
   font-size: 14px;
 }
 
-.menu-date label {
-  white-space: nowrap;
-}
-
 .menu-date select {
-  width: auto;
-  min-width: 150px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 2px solid var(--accent);
+  font-weight: 600;
+  background: #f1f5f9;
 }
 
-/* LAYOUT */
+.menu-item {
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 2px solid var(--accent);
+  margin-bottom: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.menu-item:hover {
+  background: #e5edff;
+}
+
+.menu-item.soldout {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ================= GRID ================= */
+
 .grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 20px;
 }
 
-/* ADMIN */
+/* ================= KOŠÍK ================= */
+
+.cart-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.cart-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.cart-empty {
+  font-size: 14px;
+  color: var(--muted);
+  list-style: none;
+}
+
+/* ================= ADMIN ================= */
+
 .admin-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -187,7 +236,6 @@ input, select {
   gap: 10px;
 }
 
-/* TLAČÍTKO X V MENU NA DEN */
 .day-row button {
   background: var(--danger);
   color: white;
@@ -195,62 +243,10 @@ input, select {
   border-radius: 6px;
   padding: 6px 10px;
   font-weight: bold;
-  cursor: pointer;
 }
 
-.day-row button:hover {
-  opacity: 0.85;
-}
+/* ================= TOAST ================= */
 
-/* MENU */
-.menu-item {
-  padding: 14px;
-  border-radius: var(--radius);
-  border: 2px solid var(--accent);
-  margin-bottom: 12px;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.menu-item:hover {
-  background: #e5edff;
-}
-
-.menu-item.soldout {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* KOŠÍK */
-.cart-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
-}
-
-.cart-main {
-  flex: 1;
-}
-
-.cart-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.cart-empty {
-  font-size: 14px;
-  color: var(--muted);
-  list-style: none;
-  padding: 4px 0;
-}
-
-.btn-sm {
-  padding: 5px 10px;
-  font-size: 12px;
-}
-
-/* TOAST */
 .toast-root {
   position: fixed;
   right: 20px;
@@ -268,15 +264,11 @@ input, select {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border-left: 4px solid var(--accent-2);
-  animation: slideIn 0.3s ease-out;
 }
 
-@keyframes slideIn {
-  from { transform: translateX(40px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
+/* ================= MODAL ================= */
 
-/* MODAL */
+/* overlay */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -287,6 +279,7 @@ input, select {
   z-index: 10000;
 }
 
+/* box */
 .modal {
   background: white;
   color: black;
@@ -302,214 +295,38 @@ input, select {
   margin-top: 0;
 }
 
-.modal button {
-  margin-top: 15px;
+/* OK modál */
+.modal .btn-primary {
   width: 100%;
+  margin-top: 20px;
 }
 
-.cart-bottom {
-  position: sticky;
-  bottom: 0;
-  background: white;
-  padding-top: 10px;
-}
-
-.menu-date select {
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 2px solid var(--accent);
-  font-weight: 600;
-  background: #f1f5f9;
-}
-
-.cart-bottom {
-  position: sticky;
-  bottom: 0;
-  background: white;
-  padding-top: 10px;
-}
-
-/* ============================= */
-/* 📱 MOBILNÍ RESPONSIVE VERZE */
-/* ============================= */
-@media (max-width: 900px) {
-
-  .container {
-    padding: 12px;
-  }
-
-  .topbar-inner {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
-  }
-
-  .grid {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .menu-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .menu-date {
-    justify-content: space-between;
-  }
-
-  .user-row {
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .user-actions {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  .user-actions .btn {
-    width: 100%;
-  }
-
-  .menu-item {
-    font-size: 16px;
-    padding: 16px;
-  }
-
-  .cart-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
-  .cart-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .cart-actions .btn {
-    flex: 1;
-  }
-
-  .admin-col {
-    padding: 12px;
-  }
-
-  .food-row,
-  .day-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 6px;
-  }
-
-  .modal {
-    width: 95%;
-    min-width: auto;
-  }
-
-  .btn {
-    font-size: 15px;
-    padding: 12px;
-  }
-
-}
-
-/* ===========================
-   📱 MOBILNÍ ÚPRAVY ADMINU
-   =========================== */
-@media (max-width: 768px) {
-
-  /* ADMIN GRID → pod sebe */
-  .admin-grid {
-    grid-template-columns: 1fr;
-  }
-
-  /* ADMIN bloky vzdušnější */
-  .admin-col {
-    padding: 16px;
-  }
-
-  /* Statistiky karty menší */
-  #adminStats,
-  #dailyStatsOutput {
-    font-size: 15px;
-    line-height: 1.4;
-  }
-
-  /* Nadpisy v adminu menší */
-  .admin-subtitle {
-    font-size: 16px;
-    margin-top: 20px;
-  }
-
-  /* Řádky jídel v adminu na výšku */
-  .food-row,
-  .day-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .food-row button,
-  .day-row button {
-    width: 100%;
-    margin-top: 8px;
-  }
-
-  .day-row input {
-    width: 100%;
-  }
-
-  /* ADMIN datum */
-  #adminDate,
-  #statsDate {
-    width: 100%;
-  }
-
-  /* MENU TVORBA sekce přehlednější */
-  #admin {
-    padding-bottom: 80px;
-  }
-}
-
-/* ---------- MODAL ---------- */
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal.hidden {
-  display: none;
-}
-
-.modal-content {
-  background: white;
-  padding: 20px;
-  border-radius: 10px;
-  width: 320px;
-  text-align: center;
-}
-
+/* CONFIRM modál */
 .modal-actions {
-  margin-top: 15px;
   display: flex;
-  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
 }
 
-.modal-actions button {
-  padding: 8px 14px;
-  cursor: pointer;
+.modal-actions .btn {
+  flex: 1;
+  width: auto;
 }
+
+/* ================= STAV OBJEDNÁVKY ================= */
 
 .order-disabled {
   opacity: 0.5;
   pointer-events: none;
+}
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 900px) {
+  .grid { grid-template-columns: 1fr; }
+  .admin-grid { grid-template-columns: 1fr; }
+  .user-row { flex-direction: column; gap: 10px; }
+  .user-actions { flex-direction: column; width: 100%; }
+  .user-actions .btn { width: 100%; }
+  .modal { width: 95%; }
 }
