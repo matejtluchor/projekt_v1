@@ -118,43 +118,36 @@ router.get("/orders/history", auth, async (req, res) => {
   res.json(r.rows || []);
 });
 
-// -----------------------------------------------------
-// ZRUŠENÍ OBJEDNÁVKY
-// -----------------------------------------------------
+
+//RUŠENÍ OBJEDNÁVKY
 router.post("/orders/cancel", auth, async (req, res) => {
   if (!pool) {
     return res.status(503).json({ success: false });
   }
 
   const client = await pool.connect();
+
   try {
     const { orderId } = req.body;
+    const userId = req.user.id;
 
     await client.query("BEGIN");
 
+    // 1️⃣ objednávka MUSÍ patřit uživateli
     const r = await client.query(
-      "SELECT * FROM orders WHERE id=$1 FOR UPDATE",
-      [orderId]
+      `SELECT * FROM orders WHERE id = $1 AND userid = $2 FOR UPDATE`,
+      [orderId, userId]
     );
 
     if (!r.rowCount) {
       await client.query("ROLLBACK");
-      return res.json({ success: false });
+      return res.json({ success: false, error: "Objednávka nenalezena" });
     }
 
     const order = r.rows[0];
     const today = new Date().toISOString().slice(0, 10);
 
-    // ❌ nelze zrušit ukázanou objednávku
-    if (order.shown) {
-      await client.query("ROLLBACK");
-      return res.json({
-        success: false,
-        error: "Objednávku už nelze zrušit – byla ukázána",
-      });
-    }
-
-    // ❌ nelze zrušit v den objednávky
+    // 2️⃣ ochrana proti zrušení v den objednávky
     if (order.date <= today) {
       await client.query("ROLLBACK");
       return res.json({
@@ -163,6 +156,7 @@ router.post("/orders/cancel", auth, async (req, res) => {
       });
     }
 
+    // 3️⃣ vrácení položek do menu
     const items = (order.itemnames || "").split(", ").filter(Boolean);
 
     for (const name of items) {
@@ -170,38 +164,47 @@ router.post("/orders/cancel", auth, async (req, res) => {
         `
         UPDATE menu
         SET ordered = ordered - 1
-        WHERE date=$1
-        AND foodId=(SELECT id FROM foods WHERE name=$2)
+        WHERE date = $1
+        AND foodId = (SELECT id FROM foods WHERE name = $2)
         `,
         [order.date, name]
       );
     }
 
+    // 4️⃣ vrácení kreditu
     await client.query(
-      "UPDATE users SET credit = credit + $1 WHERE id=$2",
-      [order.price, order.userid]
+      `UPDATE users SET credit = credit + $1 WHERE id = $2`,
+      [order.price, userId]
     );
 
+    // 5️⃣ zrušení objednávky
     await client.query(
-      "UPDATE orders SET status='cancelled' WHERE id=$1",
+      `UPDATE orders SET status = 'cancelled' WHERE id = $1`,
       [orderId]
     );
 
+    // 6️⃣ VRÁCENÍ NOVÉHO KREDITU (správně!)
     const u = await client.query(
-      "SELECT credit FROM users WHERE id=$1",
-      [order.userid]
+      `SELECT credit FROM users WHERE id = $1`,
+      [userId]
     );
 
     await client.query("COMMIT");
-    res.json({ success: true, credit: u.rows[0].credit });
+
+    res.json({
+      success: true,
+      credit: u.rows[0].credit,
+    });
+
   } catch (err) {
     await client.query("ROLLBACK");
-    console.error(err);
+    console.error("CANCEL ORDER ERROR:", err);
     res.status(500).json({ success: false });
   } finally {
     client.release();
   }
 });
+
 
 // -----------------------------------------------------
 // SHOW ORDER (potvrzení kuchyni)
