@@ -541,15 +541,22 @@ function confirmShowOrder(orderId) {
         return showModal("Chyba", d.error || "Nelze ukázat objednávku.");
       }
 
-      showModal("Hotovo", "Objednávka byla ukázána kuchyni.");
+      // ✅ KLÍČOVÝ MEZIKROK
+      showModal(
+        "Objednávka přijata",
+        `
+        Řekněte u výdeje toto číslo:<br><br>
+        <strong style="font-size:32px; letter-spacing:2px;">
+          ${d.pickupCode}
+        </strong>
+        `
+      );
 
       // 🔄 reload UI
       showMyOrders();
     }
   );
 }
-
-
 
 // ---------- ZRUŠENÍ OBJEDNÁVKY ----------
 async function cancelOrder(orderId) {
@@ -566,28 +573,6 @@ async function cancelOrder(orderId) {
   showModal("Hotovo", "Objednávka byla zrušena.");
   showMyOrders();
   loadMenu();
-}
-
-// -----------------------------------------------------
-//  UKÁZAT OBJEDNÁVKU KUCHYNI
-// -----------------------------------------------------
-function showOrderToKitchen(orderId) {
-  showConfirmModal(
-    "Ukázat objednávku",
-    "Opravdu chceš ukázat objednávku kuchyni? Po tomto kroku už ji nebude možné zrušit.",
-    async () => {
-      const d = await api(`/api/orders/${orderId}/show`, {
-        method: "POST",
-      });
-
-      if (!d.success) {
-        return showModal("Chyba", d.error || "Operace se nezdařila");
-      }
-
-      showModal("Hotovo", "Objednávka byla ukázána kuchyni.");
-      showMyOrders();
-    }
-  );
 }
 
 

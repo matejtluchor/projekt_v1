@@ -227,58 +227,103 @@ if (order.shown === true) {
 // SHOW ORDER (potvrzení kuchyni)
 // -----------------------------------------------------
 router.post("/orders/:id/show", auth, async (req, res) => {
-  if (!pool) {
-    return res.status(503).json({ success: false, error: "DB nedostupná" });
-  }
+  const client = await pool.connect();
 
   try {
     const orderId = req.params.id;
     const userId = req.user.id;
 
-    const r = await pool.query(
+    await client.query("BEGIN");
+
+    const r = await client.query(
       `
       SELECT id, shown
       FROM orders
       WHERE id = $1 AND userid = $2
+      FOR UPDATE
       `,
       [orderId, userId]
     );
 
     if (!r.rowCount) {
-      return res.status(404).json({
-        success: false,
-        error: "Objednávka nenalezena",
-      });
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false });
     }
 
     if (r.rows[0].shown) {
+      await client.query("ROLLBACK");
       return res.json({
         success: false,
         error: "Objednávka už byla ukázána",
       });
     }
 
-    await pool.query(
+    // 🔢 GENERUJEME VÝDEJOVÉ ČÍSLO
+    const code = "A-" + Math.floor(100 + Math.random() * 900);
+
+    await client.query(
       `
       UPDATE orders
       SET shown = true,
-          shown_at = NOW()
-      WHERE id = $1
+          shown_at = NOW(),
+          pickup_code = $1
+      WHERE id = $2
       `,
-      [orderId]
+      [code, orderId]
     );
+
+    await client.query("COMMIT");
 
     res.json({
       success: true,
-      message: "Objednávka byla úspěšně ukázána",
+      pickupCode: code,
     });
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("SHOW ORDER error:", err);
-    res.status(500).json({
-      success: false,
-      error: "Server error",
-    });
+    res.status(500).json({ success: false });
+  } finally {
+    client.release();
   }
 });
+
+// -----------------------------------------------------
+// KUCHYNĚ – ČEKAJÍCÍ OBJEDNÁVKY
+// -----------------------------------------------------
+router.get("/kitchen/orders", auth, async (req, res) => {
+  if (!["admin", "manager", "kitchen"].includes(req.user.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const r = await pool.query(`
+    SELECT id, date, itemnames, shown_at, pickup_code
+    FROM orders
+    WHERE shown = true
+      AND status = 'ok'
+      AND issued = false
+    ORDER BY shown_at ASC
+  `);
+
+  res.json(r.rows);
+});
+
+// -----------------------------------------------------
+// KUCHYNĚ – POTVRDIT VYDÁNÍ
+// -----------------------------------------------------
+router.post("/kitchen/orders/:id/issue", auth, async (req, res) => {
+  if (!["admin", "manager", "kitchen"].includes(req.user.role)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  await pool.query(`
+    UPDATE orders
+    SET issued = true,
+        issued_at = NOW()
+    WHERE id = $1
+  `, [req.params.id]);
+
+  res.json({ success: true });
+});
+
 
 module.exports = router;

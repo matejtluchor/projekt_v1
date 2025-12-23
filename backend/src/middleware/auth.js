@@ -16,7 +16,7 @@ function auth(req, res, next) {
 }
 
 function adminOnly(req, res, next) {
-  if (req.user.role !== "admin" && req.user.role !== "manager") {
+  if (!["admin", "manager", "kitchen"].includes(req.user.role)) {
     return res.status(403).json({ success: false, error: "Zakázáno" });
   }
   next();
