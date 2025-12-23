@@ -308,22 +308,96 @@ router.get("/kitchen/orders", auth, async (req, res) => {
 });
 
 // -----------------------------------------------------
-// KUCHYNĚ – POTVRDIT VYDÁNÍ
+// SHOW ORDER (ukázání objednávky kuchyni)
 // -----------------------------------------------------
-router.post("/kitchen/orders/:id/issue", auth, async (req, res) => {
-  if (!["admin", "manager", "kitchen"].includes(req.user.role)) {
-    return res.status(403).json({ error: "Forbidden" });
+router.post("/orders/:id/show", auth, async (req, res) => {
+  if (!pool) {
+    return res.status(503).json({
+      success: false,
+      error: "DB nedostupná",
+    });
   }
 
-  await pool.query(`
-    UPDATE orders
-    SET issued = true,
-        issued_at = NOW()
-    WHERE id = $1
-  `, [req.params.id]);
+  const client = await pool.connect();
 
-  res.json({ success: true });
+  try {
+    const orderId = req.params.id;
+    const userId = req.user.id;
+
+    await client.query("BEGIN");
+
+    // 1️⃣ ověření, že objednávka patří uživateli
+    const r = await client.query(
+      `
+      SELECT id, shown, status
+      FROM orders
+      WHERE id = $1 AND userid = $2
+      FOR UPDATE
+      `,
+      [orderId, userId]
+    );
+
+    if (!r.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        success: false,
+        error: "Objednávka nenalezena",
+      });
+    }
+
+    const order = r.rows[0];
+
+    if (order.status !== "ok") {
+      await client.query("ROLLBACK");
+      return res.json({
+        success: false,
+        error: "Objednávka není aktivní",
+      });
+    }
+
+    if (order.shown === true) {
+      await client.query("ROLLBACK");
+      return res.json({
+        success: false,
+        error: "Objednávka už byla ukázána kuchyni",
+      });
+    }
+
+    // 2️⃣ vygenerování výdejního čísla (pickup_code)
+    const pickupCode = Math.floor(100 + Math.random() * 900); // 100–999
+
+    // 3️⃣ označení objednávky jako ukázané
+    await client.query(
+      `
+      UPDATE orders
+      SET shown = true,
+          shown_at = NOW(),
+          pickup_code = $2
+      WHERE id = $1
+      `,
+      [orderId, pickupCode]
+    );
+
+    await client.query("COMMIT");
+
+    // 4️⃣ návrat čísla uživateli
+    res.json({
+      success: true,
+      pickupCode,
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("SHOW ORDER ERROR:", err);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  } finally {
+    client.release();
+  }
 });
+
 
 
 module.exports = router;
