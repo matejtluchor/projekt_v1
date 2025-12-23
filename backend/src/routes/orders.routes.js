@@ -145,6 +145,23 @@ router.post("/orders/cancel", auth, async (req, res) => {
     }
 
     const order = r.rows[0];
+    
+    if (order.status !== "ok") {
+  await client.query("ROLLBACK");
+  return res.json({
+    success: false,
+    error: "Objednávka už byla zrušena",
+  });
+}
+
+if (order.shown === true) {
+  await client.query("ROLLBACK");
+  return res.json({
+    success: false,
+    error: "Objednávku už nelze zrušit (byla ukázána kuchyni)",
+  });
+}
+
     const today = new Date().toISOString().slice(0, 10);
 
     // 2️⃣ ochrana proti zrušení v den objednávky
