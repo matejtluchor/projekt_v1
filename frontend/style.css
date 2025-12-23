@@ -66,6 +66,12 @@ body {
   overflow: hidden;
 }
 
+/* ZOBRAZENÁ OBJEDNÁVKA (UKÁZÁNA KUCHYNI) */
+.order-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* =====================
    INPUTY
 ===================== */

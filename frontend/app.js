@@ -533,9 +533,8 @@ function confirmShowOrder(orderId) {
     "Ukázat objednávku kuchyni?",
     "Po potvrzení už nebude možné objednávku zrušit.",
     async () => {
-      const d = await api("/api/orders/show", {
+      const d = await api(`/api/orders/${orderId}/show`, {
         method: "POST",
-        body: JSON.stringify({ orderId }),
       });
 
       if (!d.success) {
@@ -543,10 +542,13 @@ function confirmShowOrder(orderId) {
       }
 
       showModal("Hotovo", "Objednávka byla ukázána kuchyni.");
-      showMyOrders(); // 🔄 refresh seznamu
+
+      // 🔄 reload UI
+      showMyOrders();
     }
   );
 }
+
 
 
 // ---------- ZRUŠENÍ OBJEDNÁVKY ----------
