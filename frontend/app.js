@@ -436,13 +436,14 @@ async function showMyOrders() {
   $("myOrders").classList.remove("hidden");
 
   const orders = await api("/api/orders/history");
+  const activeOrders = orders.filter(o => o.status !== "cancelled");
 
   if (!Array.isArray(orders) || orders.length === 0) {
     $("myOrdersList").innerHTML = "<p>Nemáš žádné objednávky.</p>";
     return;
   }
 
-  $("myOrdersList").innerHTML = orders.map(o => {
+  $("myOrdersList").innerHTML = activeOrders.map(o => {
     // 🔴 FIX: backend posílá itemnames (malé n)
     const namesStr = o.itemNames || o.itemnames || "";
     const grouped = {};
@@ -490,7 +491,6 @@ async function showMyOrders() {
   }).join("");
 }
 
-// ---------- CONFIRM SHOW ORDER ----------
 // -----------------------------------------------------
 //  CONFIRM MODAL (ANO / NE)
 // -----------------------------------------------------
@@ -525,6 +525,28 @@ function showConfirmModal(title, text, onConfirm) {
   document.body.appendChild(overlay);
 }
 
+// -----------------------------------------------------
+//  UKÁZAT OBJEDNÁVKU KUCHYNI (CONFIRM FLOW)
+// -----------------------------------------------------
+function confirmShowOrder(orderId) {
+  showConfirmModal(
+    "Ukázat objednávku kuchyni?",
+    "Po potvrzení už nebude možné objednávku zrušit.",
+    async () => {
+      const d = await api("/api/orders/show", {
+        method: "POST",
+        body: JSON.stringify({ orderId }),
+      });
+
+      if (!d.success) {
+        return showModal("Chyba", d.error || "Nelze ukázat objednávku.");
+      }
+
+      showModal("Hotovo", "Objednávka byla ukázána kuchyni.");
+      showMyOrders(); // 🔄 refresh seznamu
+    }
+  );
+}
 
 
 // ---------- ZRUŠENÍ OBJEDNÁVKY ----------
