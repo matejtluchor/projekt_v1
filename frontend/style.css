@@ -20,13 +20,14 @@ body {
 
 .hidden { display: none !important; }
 
+/* =====================
+   LAYOUT
+===================== */
 .container {
   max-width: var(--max-width);
   margin: 0 auto;
   padding: 20px;
 }
-
-/* ================= TOPBAR ================= */
 
 .topbar {
   background: linear-gradient(90deg, var(--accent), #081426);
@@ -52,8 +53,9 @@ body {
   color: var(--accent-2);
 }
 
-/* ================= KARTY ================= */
-
+/* =====================
+   KARTY
+===================== */
 .card {
   background: var(--card);
   border-radius: var(--radius);
@@ -61,10 +63,12 @@ body {
   padding: 20px;
   margin: 18px 0;
   color: #0f172a;
+  overflow: hidden;
 }
 
-/* ================= INPUTY ================= */
-
+/* =====================
+   INPUTY
+===================== */
 input, select {
   width: 100%;
   box-sizing: border-box;
@@ -75,8 +79,9 @@ input, select {
   background: #f8fafc;
 }
 
-/* ================= BUTTONY ================= */
-
+/* =====================
+   BUTTONY
+===================== */
 .btn {
   padding: 10px 16px;
   border-radius: var(--radius);
@@ -119,8 +124,9 @@ input, select {
   font-size: 12px;
 }
 
-/* ================= USER ================= */
-
+/* =====================
+   USER
+===================== */
 .user-row {
   display: flex;
   justify-content: space-between;
@@ -132,8 +138,18 @@ input, select {
   gap: 10px;
 }
 
-/* ================= MENU ================= */
+/* =====================
+   GRID
+===================== */
+.grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
 
+/* =====================
+   MENU
+===================== */
 .menu-header {
   display: flex;
   justify-content: space-between;
@@ -145,15 +161,14 @@ input, select {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
 }
 
 .menu-date select {
+  min-width: 150px;
   padding: 8px 12px;
   border-radius: 8px;
   border: 2px solid var(--accent);
   font-weight: 600;
-  background: #f1f5f9;
 }
 
 .menu-item {
@@ -174,16 +189,9 @@ input, select {
   cursor: not-allowed;
 }
 
-/* ================= GRID ================= */
-
-.grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 20px;
-}
-
-/* ================= KOŠÍK ================= */
-
+/* =====================
+   KOŠÍK
+===================== */
 .cart-row {
   display: flex;
   justify-content: space-between;
@@ -199,11 +207,18 @@ input, select {
 .cart-empty {
   font-size: 14px;
   color: var(--muted);
-  list-style: none;
 }
 
-/* ================= ADMIN ================= */
+.cart-bottom {
+  position: sticky;
+  bottom: 0;
+  background: white;
+  padding-top: 10px;
+}
 
+/* =====================
+   ADMIN
+===================== */
 .admin-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -218,7 +233,6 @@ input, select {
 
 .admin-subtitle {
   margin-top: 30px;
-  margin-bottom: 12px;
   font-size: 18px;
   font-weight: 800;
   color: var(--accent);
@@ -239,14 +253,14 @@ input, select {
 .day-row button {
   background: var(--danger);
   color: white;
-  border: none;
   border-radius: 6px;
   padding: 6px 10px;
-  font-weight: bold;
+  cursor: pointer;
 }
 
-/* ================= TOAST ================= */
-
+/* =====================
+   TOAST
+===================== */
 .toast-root {
   position: fixed;
   right: 20px;
@@ -266,9 +280,9 @@ input, select {
   border-left: 4px solid var(--accent-2);
 }
 
-/* ================= MODAL ================= */
-
-/* overlay */
+/* =====================
+   MODAL – JEDINÝ SYSTÉM
+===================== */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -279,7 +293,6 @@ input, select {
   z-index: 10000;
 }
 
-/* box */
 .modal {
   background: white;
   color: black;
@@ -295,39 +308,39 @@ input, select {
   margin-top: 0;
 }
 
-/* OK modál */
-.modal .btn-primary {
+.modal button {
+  margin-top: 15px;
   width: 100%;
-  margin-top: 20px;
 }
 
-/* CONFIRM modál */
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.modal-actions .btn {
-  flex: 1;
-  width: auto;
-}
-
-/* ================= STAV OBJEDNÁVKY ================= */
-
+/* =====================
+   STAV OBJEDNÁVKY
+===================== */
 .order-disabled {
   opacity: 0.5;
   pointer-events: none;
 }
 
-/* ================= RESPONSIVE ================= */
-
+/* =====================
+   RESPONSIVE
+===================== */
 @media (max-width: 900px) {
-  .grid { grid-template-columns: 1fr; }
-  .admin-grid { grid-template-columns: 1fr; }
-  .user-row { flex-direction: column; gap: 10px; }
-  .user-actions { flex-direction: column; width: 100%; }
-  .user-actions .btn { width: 100%; }
-  .modal { width: 95%; }
+  .grid,
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .user-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .user-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .btn {
+    width: 100%;
+  }
 }
-  
