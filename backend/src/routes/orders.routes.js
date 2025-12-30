@@ -295,17 +295,21 @@ router.get("/kitchen/orders", auth, async (req, res) => {
     return res.status(403).json({ error: "Forbidden" });
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+
   const r = await pool.query(`
     SELECT id, date, itemnames, shown_at, pickup_code
     FROM orders
     WHERE shown = true
       AND status = 'ok'
       AND issued = false
+      AND date = $1
     ORDER BY shown_at ASC
-  `);
+  `, [today]);
 
   res.json(r.rows);
 });
+
 
 // -----------------------------------------------------
 // SHOW ORDER (ukázání objednávky kuchyni)

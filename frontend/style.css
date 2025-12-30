@@ -350,3 +350,22 @@ input, select {
     width: 100%;
   }
 }
+
+@media (max-width: 600px) {
+  .topbar-inner {
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 8px 12px;
+  }
+
+  .topbar-inner h2,
+  .logged-user {
+    font-size: 14px;
+  }
+
+  .btn-ghost {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
